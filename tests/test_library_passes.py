@@ -42,6 +42,7 @@ def test_the_features_with_checked_content_are_all_seen(rendered):
         "nas",
         "notifications",
         "observability",
+        "tailscale",
     }
 
 
