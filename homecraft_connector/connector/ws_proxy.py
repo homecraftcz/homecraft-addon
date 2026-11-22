@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 
 import aiohttp
 
-from . import content, ha_token, policy, settings
+from . import audit, content, ha_token, policy, settings
 
 logger = logging.getLogger(__name__)
 
@@ -120,14 +120,9 @@ class Sessions:
             raise policy.OpError("unknown_session", "")
         if not policy.ws_allowed(msg):
             kind = msg.get("type") if isinstance(msg, dict) else None
-            logger.info("Odmítnuto: ws %s", kind)
-            error = ha_error(
-                msg.get("id") if isinstance(msg, dict) else None,
-                "not_allowed",
-                f"{kind} is not allowed by Homecraft Connector",
+            return await self._refuse(
+                sid, msg, "not_allowed", f"{kind} is not allowed by Homecraft Connector"
             )
-            await self._push({"op": "ws.msg", "session": sid, "msg": error})
-            return "not_allowed"
         if msg["type"] == "supervisor/api":
             # In a task: ws.send runs inline in the read loop, and an install takes minutes.
             task = asyncio.create_task(self._supervisor_reply(sid, msg))
@@ -136,24 +131,36 @@ class Sessions:
             return None
         if msg["type"] == "lovelace/config/save" and (what := await self._dashboard_refused(msg)):
             e = content.refused(f"lovelace/config/save {msg.get('url_path')}", what)
-            logger.info("Odmítnuto: %s", e.message)
-            error = ha_error(msg.get("id"), e.code, e.message)
-            await self._push({"op": "ws.msg", "session": sid, "msg": error})
-            return e.code
+            return await self._refuse(sid, msg, e.code, e.message)
         if msg["type"] == "lovelace/resources/update" and not await self._own_resource(msg):
-            logger.info("Odmítnuto: ws lovelace/resources/update %s", msg.get("resource_id"))
             what = "lovelace/resources/update of a resource not Homecraft's own card"
-            error = ha_error(msg.get("id"), "not_allowed", f"{what} is not allowed")
-            await self._push({"op": "ws.msg", "session": sid, "msg": error})
-            return "not_allowed"
+            return await self._refuse(sid, msg, "not_allowed", f"{what} is not allowed")
         await entry[0].send_json(msg)
         return None
 
+    async def _refuse(self, sid: str, msg: object, code: str, message: str) -> str:
+        """Answer a refused command as HA would; its code for the audit."""
+        logger.info("Odmítnuto: %s", message)
+        msg_id = msg.get("id") if isinstance(msg, dict) else None
+        await self._push({"op": "ws.msg", "session": sid, "msg": ha_error(msg_id, code, message)})
+        return code
+
     async def _supervisor_reply(self, sid: str, msg: dict) -> None:
-        reply = await self._supervisor(msg)
+        """Off the read loop, so an options write's live read blocks nothing.
+        send() has already returned (audited ok as forwarded), so a refusal
+        here gets an audit entry of its own."""
+        refused = await self._addon_options_refused(msg)
+        if refused:
+            target = f"supervisor/api {msg.get('method', 'get')} {msg['endpoint']}"
+            audit.record("ws.send", target, False, refused.code)
+        else:
+            reply = await self._supervisor(msg)
         if sid in self._open and not self._paused():
             try:
-                await self._push({"op": "ws.msg", "session": sid, "msg": reply})
+                if refused:
+                    await self._refuse(sid, msg, refused.code, refused.message)
+                else:
+                    await self._push({"op": "ws.msg", "session": sid, "msg": reply})
             except (ConnectionError, aiohttp.ClientError, RuntimeError):
                 pass  # Homecraft is gone; its own drop closes every session
 
@@ -240,6 +247,21 @@ class Sessions:
         reply = await self._query({"type": "lovelace/config", "url_path": msg.get("url_path")})
         live = reply.get("result") if reply.get("success") else None  # none yet: whole
         return await asyncio.to_thread(content.check_dashboard, config, live)
+
+    async def _addon_options_refused(self, msg: dict) -> policy.OpError | None:
+        """An add-on options write against the add-on's live options, read
+        from the Supervisor just before; a failed read refuses it."""
+        found = policy.addon_options_check(msg["endpoint"])
+        if found is None:
+            return None
+        slug, check = found
+        info = await self._supervisor({"id": None, "endpoint": f"/addons/{slug}/info"})
+        result = info.get("result") if info.get("success") else None
+        if not isinstance(result, dict) or not isinstance(result.get("options"), dict):
+            what = "volby bez čtení aktuálních"
+        else:
+            what = check(msg.get("data"), result["options"])
+        return content.refused(f"supervisor/api {msg['endpoint']}", what) if what else None
 
     async def _own_resource(self, msg: dict) -> bool:
         """An update may only touch a resource that already points at one of

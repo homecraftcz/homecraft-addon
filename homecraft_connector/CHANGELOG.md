@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.16.0
+
+- Homecraft smí obsluhovat doplněk Tailscale (feature Tailscale, vzdálený
+  přístup k HA bez veřejné adresy): přečíst jeho info, nainstalovat, spustit
+  a restartovat ho a změnit jeho volby. Změnit smí jen `advertise_routes`
+  (jen soukromé IPv4 sítě: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) a
+  `share_homeassistant` (`serve` / `disabled`, nikdy `funnel`); doplněk to
+  před každým zápisem porovná s aktuálními volbami ze Supervisoru a cokoli
+  jiného (nebo nepovedené čtení) odmítne.
+- Balíček s `http:` projde jen s přesným obsahem `use_x_forwarded_for: true`
+  a `trusted_proxies: [127.0.0.1]`, aby HA věřil proxy doplňku Tailscale na
+  localhostu. Jakékoli jiné `http:` zůstává zakázané.
+- Ke čtení nově příkaz WebSocketu `network` (podsíť z adaptérů HA pro
+  `advertise_routes`) a `GET /host/info` Supervisoru (název stroje v tailnetu).
+
 ## 0.15.0
 
 - Panel má na Přehledu sekci **Aktualizace**: zastaralé karty Homecraftu, které

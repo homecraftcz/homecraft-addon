@@ -364,3 +364,28 @@ def test_refused_error():
     e = content.refused("packages/x.yaml", "shell_command")
     assert e.code == "refused_content"
     assert e.message == "packages/x.yaml: shell_command není přes Homecraft Connector povolený"
+
+
+TAILSCALE_HTTP = "http:\n  use_x_forwarded_for: true\n  trusted_proxies:\n    - 127.0.0.1\n"
+
+
+def test_the_tailscale_http_package_passes():
+    assert content.check_yaml("packages/hfb_tailscale.yaml", TAILSCALE_HTTP) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        TAILSCALE_HTTP + "  server_port: 80\n",
+        TAILSCALE_HTTP.replace("127.0.0.1", "0.0.0.0/0"),
+        TAILSCALE_HTTP + "    - 10.0.0.1\n",
+        TAILSCALE_HTTP.replace("true", "false"),
+        TAILSCALE_HTTP.replace("true", "1"),  # type-strict
+        "http:\n  1: x\n  a: 2020-01-01\n",  # what JSON cannot sort
+        "http:\n  trusted_proxies: [127.0.0.1]\n",
+        "http:\n",
+        "HTTP:\n  use_x_forwarded_for: true\n  trusted_proxies: [127.0.0.1]\n",
+    ],
+)
+def test_any_other_http_is_refused(text):
+    assert content.check_yaml("packages/hfb_tailscale.yaml", text) == "http"

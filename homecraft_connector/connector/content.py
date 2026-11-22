@@ -10,7 +10,7 @@ from collections import Counter
 
 import yaml
 
-from .policy import OpError
+from .policy import OpError, canonical
 
 # Top-level integrations that run commands, send data out or serve code.
 FORBIDDEN_KEYS = frozenset(
@@ -24,7 +24,7 @@ FORBIDDEN_KEYS = frozenset(
         "scrape",
         "panel_custom",
         "panel_iframe",
-        "http",
+        "http",  # but TAILSCALE_HTTP
         "frontend",  # extra_module_url: JS into every browser
         "lovelace",  # resources: the same
         "ffmpeg",  # its binary
@@ -46,6 +46,9 @@ HOMEASSISTANT_KEYS = frozenset(
         "customize_glob",
     }
 )
+# The Tailscale feature's package (homecraft M55): HA trusts the add-on's proxy
+# on localhost. Any other `http:` stays refused.
+TAILSCALE_HTTP = canonical({"use_x_forwarded_for": True, "trusted_proxies": ["127.0.0.1"]})
 FORBIDDEN_PLATFORMS = frozenset({"command_line", "shell_command", "rest", "scrape"})
 # Every service of these domains; `hassio` as a whole: add-on stdin/start/stop,
 # host reboot/shutdown, backups (the library calls none of it).
@@ -153,7 +156,11 @@ def _findings(node: object, config: bool, seen: set[int], out: list[str]) -> lis
     elif isinstance(node, dict):
         for key, value in node.items():
             name = str(key).split(" ", 1)[0].lower()
-            if config and name in FORBIDDEN_KEYS:
+            if (
+                config
+                and name in FORBIDDEN_KEYS
+                and not (key == "http" and canonical(value) == TAILSCALE_HTTP)
+            ):
                 out.append(name)
             if config and name == "homeassistant" and isinstance(value, dict):
                 bad = HOMEASSISTANT_KEYS & {str(k).lower() for k in value}

@@ -157,6 +157,15 @@ Home Assistantem a když neprojde, vrátí soubor do původního stavu. Pokud
 `homeassistant:` není obyčejný blok (`!include`, `{...}`) nebo už má vlastní
 `packages:`, nezmění nic.
 
+Tailscale (feature Tailscale): doplněk smí přečíst info doplňku Tailscale
+(`a0d7b954_tailscale`), nainstalovat, spustit a restartovat ho a změnit jeho
+volby, ale jen `advertise_routes` (jen soukromé IPv4 sítě uvnitř 10.0.0.0/8,
+172.16.0.0/12 a 192.168.0.0/16) a `share_homeassistant` (`serve` nebo
+`disabled`, nikdy `funnel`). Před zápisem voleb si doplněk přečte aktuální
+volby ze Supervisoru; liší-li se cokoli jiného (nebo čtení selže), zápis
+odmítne s `refused_content`. Ke čtení navíc příkaz WebSocketu `network` (síťové
+adaptéry HA) a `GET /host/info` Supervisoru (název stroje).
+
 ## Bezpečnost
 
 **Kam** (allowlist, viz výše) a **co**: doplněk před zápisem zkontroluje obsah
@@ -171,7 +180,13 @@ verze integrace = nová verze doplňku.
   - klíč `shell_command`, `command_line`, `python_script`, `pyscript`,
     `rest_command`, `rest`, `scrape`, `panel_custom`, `panel_iframe`, `http`,
     `frontend`, `lovelace`, `ffmpeg`, `logger`, i s příponou
-    (`shell_command 2:`);
+    (`shell_command 2:`); výjimka je jen `http:` přesně s obsahem
+    `use_x_forwarded_for: true` a `trusted_proxies: [127.0.0.1]` (proxy
+    doplňku Tailscale), jakékoli jiné `http:` se odmítne. Pozor:
+    `trusted_proxies: [127.0.0.1]` znamená, že HA věří hlavičce
+    `X-Forwarded-For` od každého procesu v síti hostitele HA (doplňky
+    s `host_network`), nejen od Tailscale; vlastník to pro proxy Tailscale
+    přijal;
   - `influxdb:` s čímkoli kromě `include`, `exclude` a `ignore_attributes`
     (kam data jdou, nastavuje config flow integrace);
   - `homeassistant:` s `auth_providers`, `packages`, `allowlist_external_dirs`,
