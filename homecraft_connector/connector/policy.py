@@ -5,6 +5,7 @@ the server, so a compromised Homecraft cannot widen it. Least privilege: only
 what the Homecraft backend and the library features send. Pure functions, no I/O."""
 
 import base64
+import ipaddress
 import json
 import re
 import urllib.parse
@@ -54,6 +55,8 @@ WS_TYPES = frozenset(
         "hacs/repositories/list",
         # HA 2026.11+ Marketplace (built-in HACS successor, #25)
         "marketplace/repositories/list",
+        # Tailscale feature: the subnet to advertise, from HA's adapters (homecraft M55)
+        "network",
     }
 )
 # HACS / Marketplace integrations features require (homecraft#786, #25): HACS or
@@ -107,15 +110,65 @@ NOTIFICATION_FIELDS = {
 
 # Add-ons features reach (library `"type": "addon"`); the ones with
 # `install: true` may also be installed and started (addon_install).
-ADDONS = frozenset({"a0d7b954_nodered", "a889bffc_go2rtc", "a0d7b954_influxdb", "a0d7b954_grafana"})
-INSTALLABLE = frozenset({"a0d7b954_influxdb", "a0d7b954_grafana"})
+# Tailscale (homecraft M55): addon_options writes its options and restarts it;
+# ws_proxy checks each options write against the live ones (tailscale_options_refused).
+TAILSCALE_ADDON = "a0d7b954_tailscale"
+TAILSCALE = frozenset({TAILSCALE_ADDON})
+ADDONS = frozenset(
+    {"a0d7b954_nodered", "a889bffc_go2rtc", "a0d7b954_influxdb", "a0d7b954_grafana", *TAILSCALE}
+)
+INSTALLABLE = frozenset({"a0d7b954_influxdb", "a0d7b954_grafana", *TAILSCALE})
 _SUPERVISOR = [
     (re.compile(r"/addons/([a-z0-9_]+)/info"), "get", ADDONS),
     (re.compile(r"/store/addons/([a-z0-9_]+)"), "get", ADDONS),  # file_channels.addon_info
     (re.compile(r"/store/addons/([a-z0-9_]+)/install"), "post", INSTALLABLE),
     (re.compile(r"/addons/([a-z0-9_]+)/start"), "post", INSTALLABLE),
+    (re.compile(r"/addons/([a-z0-9_]+)/restart"), "post", TAILSCALE),
+    (re.compile(r"/addons/([a-z0-9_]+)/options"), "post", TAILSCALE),
     (re.compile(r"/ingress/session()"), "post", frozenset({""})),
+    (re.compile(r"/host/info()"), "get", frozenset({""})),  # the inventory: HA's hostname
 ]
+# The only Tailscale options Homecraft may change, and their allowed values:
+# private IPv4 subnets (no `local_subnets`, IPv6 or public ranges), never `funnel`.
+TAILSCALE_ROUTE_NETS = tuple(
+    ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+TAILSCALE_SHARE = frozenset({"serve", "disabled"})
+
+
+def _private_route(route: object) -> bool:
+    if not isinstance(route, str):
+        return False
+    try:
+        net = ipaddress.ip_network(route, strict=False)
+    except ValueError:
+        return False
+    return net.version == 4 and any(net.subnet_of(p) for p in TAILSCALE_ROUTE_NETS)
+
+
+TAILSCALE_KEYS = {
+    "advertise_routes": lambda v: isinstance(v, list) and all(map(_private_route, v)),
+    "share_homeassistant": lambda v: v in TAILSCALE_SHARE,
+}
+
+
+def tailscale_options_refused(new: object, current: object) -> str | None:
+    """`POST /addons/a0d7b954_tailscale/options` data (`{"options": {...}}`, the
+    full options) against `current` (`options` of its info just before): only
+    TAILSCALE_KEYS may differ, each to an allowed value. The refused item or None."""
+    if not isinstance(new, dict) or set(new) != {"options"} or not isinstance(new["options"], dict):
+        return "tvar dat"
+    if not isinstance(current, dict):
+        return "neznámé aktuální volby"
+    options = new["options"]
+    for key in [*current, *(k for k in options if k not in current)]:
+        if key in options and key in current and options[key] == current[key]:
+            continue  # unchanged: the user's own value never blocks Homecraft
+        if key not in options or key not in TAILSCALE_KEYS:
+            return f"klíč {key}"
+        if not TAILSCALE_KEYS[key](options[key]):
+            return f"{key}: {options[key]}"
+    return None
 
 
 def _supervisor_allowed(endpoint: object, method: object) -> bool:

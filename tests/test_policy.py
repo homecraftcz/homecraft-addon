@@ -9,6 +9,7 @@ from connector.policy import (
     flow_step_host,
     http_target,
     ingress_allowed,
+    tailscale_options_refused,
     ws_allowed,
 )
 
@@ -77,6 +78,14 @@ WS_ALLOWED = [
     sup("/addons/a0d7b954_influxdb/start", "post"),
     sup("/addons/a0d7b954_grafana/start", "post"),
     sup("/ingress/session", "post"),
+    sup("/addons/a0d7b954_tailscale/info"),
+    sup("/store/addons/a0d7b954_tailscale/install", "post"),
+    sup("/addons/a0d7b954_tailscale/start", "post"),
+    sup("/addons/a0d7b954_tailscale/restart", "post"),
+    sup("/addons/a0d7b954_tailscale/options", "post"),
+    sup("/host/info", "get"),
+    sup("/host/info"),
+    {"id": 4, "type": "network"},
     {
         "id": 5,
         "type": "lovelace/resources/create",
@@ -191,6 +200,15 @@ WS_REFUSED = [
     sup("/store/addons/core_ssh", "get"),
     sup("/ingress/session", "get"),
     sup("/host/reboot", "post"),
+    sup("/addons/a0d7b954_nodered/restart", "post"),
+    sup("/addons/a0d7b954_influxdb/options", "post"),
+    sup("/addons/a0d7b954_tailscale/options", "get"),
+    sup("/addons/a0d7b954_tailscale/restart", "get"),
+    sup("/addons/a0d7b954_tailscale/stop", "post"),
+    sup("/addons/a0d7b954_tailscale/uninstall", "post"),
+    sup("/host/info", "post"),
+    sup("/host/options", "post"),
+    {"type": "network/configure"},
     sup("/backups", "get"),
     sup("/addons/a0d7b954_nodered/info/../../core_ssh"),
     res("https://evil.example/x.js"),
@@ -445,3 +463,57 @@ FILES = [
 @pytest.mark.parametrize(("op", "path", "expected"), FILES)
 def test_file_allowed(op, path, expected):
     assert file_allowed(op, path) is expected
+
+
+TS_CURRENT = {
+    "advertise_routes": ["local_subnets"],
+    "share_homeassistant": "disabled",
+    "login_server": "https://controlplane.tailscale.com",
+    "userspace_networking": True,
+}
+
+
+def ts(**changes):
+    return {"options": {**TS_CURRENT, **changes}}
+
+
+@pytest.mark.parametrize(
+    "new",
+    [
+        ts(),
+        ts(advertise_routes=["192.168.1.0/24"], share_homeassistant="serve"),
+        ts(advertise_routes=["10.0.0.0/8", "172.16.5.0/24", "192.168.1.10"]),
+        ts(advertise_routes=["192.168.1.7/24"]),  # host bits: strict=False
+        ts(advertise_routes=[]),
+        ts(share_homeassistant="disabled"),
+    ],
+)
+def test_tailscale_options_allowed(new):
+    assert tailscale_options_refused(new, TS_CURRENT) is None
+
+
+@pytest.mark.parametrize(
+    "new, refused",
+    [
+        (ts(login_server="https://evil.example"), "klíč login_server"),
+        (ts(exit_node=True), "klíč exit_node"),
+        (ts(share_homeassistant="funnel"), "share_homeassistant: funnel"),
+        (ts(advertise_routes=["8.8.8.0/24"]), "advertise_routes"),
+        (ts(advertise_routes=["192.168.0.0/15"]), "advertise_routes"),
+        (ts(advertise_routes=["0.0.0.0/0"]), "advertise_routes"),
+        (ts(advertise_routes=["local_subnets", "192.168.1.0/24"]), "advertise_routes"),
+        (ts(advertise_routes=["fd7a:115c:a1e0::/48"]), "advertise_routes"),
+        (ts(advertise_routes="192.168.1.0/24"), "advertise_routes"),
+        (ts(advertise_routes=[3232235776]), "advertise_routes"),
+        ({"options": {"share_homeassistant": "serve"}}, "klíč advertise_routes"),  # dropped
+        (TS_CURRENT, "tvar dat"),
+        ({**ts(), "x": 1}, "tvar dat"),
+        ({"options": []}, "tvar dat"),
+    ],
+)
+def test_tailscale_options_refused(new, refused):
+    assert (tailscale_options_refused(new, TS_CURRENT) or "").startswith(refused)
+
+
+def test_tailscale_options_need_the_current_ones():
+    assert tailscale_options_refused(ts(), None) == "neznámé aktuální volby"

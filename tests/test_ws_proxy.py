@@ -18,6 +18,7 @@ RESOURCES = [  # lovelace/resources
     {"id": "own2", "type": "module", "url": "/local/homecraft/energy-card.js"},
     {"id": "hacs", "type": "module", "url": "/hacsfiles/heating-card/heating-card.js?hacstag=1"},
 ]
+TAILSCALE_OPTIONS = {"advertise_routes": [], "share_homeassistant": "disabled", "exit_node": False}
 
 
 @contextlib.asynccontextmanager
@@ -71,7 +72,14 @@ async def fake_ha(monkeypatch, token="t0k"):
         seen.append({"supervisor": request.match_info["slug"]})
         slug = request.match_info["slug"]
         url = "/api/hassio_ingress/tokNR/" if slug == "a0d7b954_nodered" else None
-        return web.json_response({"result": "ok", "data": {"ingress_url": url}})
+        data = {"ingress_url": url}
+        if slug == "a0d7b954_tailscale":
+            data["options"] = TAILSCALE_OPTIONS
+        return web.json_response({"result": "ok", "data": data})
+
+    async def addon_options(request):  # the Supervisor
+        seen.append({"options": request.match_info["slug"], "data": await request.json()})
+        return web.json_response({"result": "ok", "data": {}})
 
     async def store_install(request):  # the Supervisor refuses
         seen.append(
@@ -92,6 +100,7 @@ async def fake_ha(monkeypatch, token="t0k"):
     app.router.add_post("/api/config/config_entries/flow", flow_start)
     app.router.add_route("*", "/api/config/config_entries/flow/{id}", flow_step)
     app.router.add_get("/addons/{slug}/info", addon_info)
+    app.router.add_post("/addons/{slug}/options", addon_options)
     app.router.add_post("/store/addons/{slug}/install", store_install)
     app.router.add_route("*", "/api/hassio_ingress/tokNR/{rest:.*}", ingress)
     runner = web.AppRunner(app)
@@ -480,5 +489,43 @@ def test_ingress_session_goes_to_core_as_the_admin(monkeypatch):
             assert wrong["error"]["code"] == "ha_token_invalid"
             assert ok == {"id": 9, "type": "result", "success": True, "result": 1}
             assert [c for c in seen if c.get("type") == "supervisor/api"] == [{"id": 1, **msg}]
+
+    asyncio.run(scenario())
+
+
+def test_tailscale_options_only_the_allowed_keys_change(monkeypatch):
+    """Checked against the add-on's live options; a failed read refuses."""
+
+    async def scenario():
+        async with fake_ha(monkeypatch) as (seen, _), aiohttp.ClientSession() as http:
+            pushed: list[dict] = []
+
+            async def push(data):
+                pushed.append(data)
+
+            sessions = ws_proxy.Sessions(http, push)
+            sid = (await sessions.open())["session"]
+            ok = {**TAILSCALE_OPTIONS, "advertise_routes": ["192.168.1.0/24"]}
+            bad = {**TAILSCALE_OPTIONS, "exit_node": True}
+            post = {"type": "supervisor/api", "method": "post"}
+            post["endpoint"] = "/addons/a0d7b954_tailscale/options"
+            refused = await sessions.send(sid, {"id": 1, **post, "data": {"options": ok}})
+            assert refused == "refused_content"  # no Supervisor: the read fails
+            monkeypatch.setattr(settings, "SUPERVISOR_URL", settings.HA_URL)
+            refused = await sessions.send(sid, {"id": 2, **post, "data": {"options": bad}})
+            assert refused == "refused_content"
+            assert await sessions.send(sid, {"id": 3, **post, "data": {"options": ok}}) is None
+            await _until(pushed, 3)
+            replies = {p["msg"]["id"]: p["msg"] for p in pushed}
+            assert replies[1]["error"]["code"] == "refused_content"
+            assert replies[2]["error"] == {
+                "code": "refused_content",
+                "message": "supervisor/api /addons/a0d7b954_tailscale/options: klíč exit_node "
+                "není přes Homecraft Connector povolený",
+            }
+            assert replies[3]["success"] is True
+            written = [c for c in seen if "options" in c]
+            assert written == [{"options": "a0d7b954_tailscale", "data": {"options": ok}}]
+            await sessions.close_all()
 
     asyncio.run(scenario())

@@ -128,6 +128,12 @@ class Sessions:
             )
             await self._push({"op": "ws.msg", "session": sid, "msg": error})
             return "not_allowed"
+        if msg["type"] == "supervisor/api" and (what := await self._addon_options_refused(msg)):
+            e = content.refused(f"supervisor/api {msg['endpoint']}", what)
+            logger.info("Odmítnuto: %s", e.message)
+            error = ha_error(msg.get("id"), e.code, e.message)
+            await self._push({"op": "ws.msg", "session": sid, "msg": error})
+            return e.code
         if msg["type"] == "supervisor/api":
             # In a task: ws.send runs inline in the read loop, and an install takes minutes.
             task = asyncio.create_task(self._supervisor_reply(sid, msg))
@@ -240,6 +246,21 @@ class Sessions:
         reply = await self._query({"type": "lovelace/config", "url_path": msg.get("url_path")})
         live = reply.get("result") if reply.get("success") else None  # none yet: whole
         return await asyncio.to_thread(content.check_dashboard, config, live)
+
+    async def _addon_options_refused(self, msg: dict) -> str | None:
+        """An options write (only Tailscale's passes the allowlist) against the
+        add-on's live options, read from the Supervisor just before; a failed
+        read refuses it."""
+        if not msg["endpoint"].endswith("/options"):
+            return None
+        if msg["endpoint"] != f"/addons/{policy.TAILSCALE_ADDON}/options":
+            return "volby doplňku"  # no check for any other add-on's options
+        endpoint = f"/addons/{policy.TAILSCALE_ADDON}/info"
+        info = await self._supervisor({"id": None, "endpoint": endpoint, "method": "get"})
+        result = info.get("result") if info.get("success") else None
+        if not isinstance(result, dict) or not isinstance(result.get("options"), dict):
+            return "volby bez čtení aktuálních"
+        return policy.tailscale_options_refused(msg.get("data"), result["options"])
 
     async def _own_resource(self, msg: dict) -> bool:
         """An update may only touch a resource that already points at one of
