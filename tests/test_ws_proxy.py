@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 from aiohttp import web
 
-from connector import ha_token, http_proxy, policy, settings, ws_proxy
+from connector import audit, ha_token, http_proxy, policy, settings, ws_proxy
 from connector.policy import OpError
 
 DASHBOARDS: dict[str, dict] = {}  # url_path -> live config (lovelace/config)
@@ -509,11 +509,11 @@ def test_tailscale_options_only_the_allowed_keys_change(monkeypatch):
             bad = {**TAILSCALE_OPTIONS, "exit_node": True}
             post = {"type": "supervisor/api", "method": "post"}
             post["endpoint"] = "/addons/a0d7b954_tailscale/options"
-            refused = await sessions.send(sid, {"id": 1, **post, "data": {"options": ok}})
-            assert refused == "refused_content"  # no Supervisor: the read fails
+            # checked in the call's task: send() itself forwards (None)
+            assert await sessions.send(sid, {"id": 1, **post, "data": {"options": ok}}) is None
+            await _until(pushed, 1)  # no Supervisor: the read fails
             monkeypatch.setattr(settings, "SUPERVISOR_URL", settings.HA_URL)
-            refused = await sessions.send(sid, {"id": 2, **post, "data": {"options": bad}})
-            assert refused == "refused_content"
+            assert await sessions.send(sid, {"id": 2, **post, "data": {"options": bad}}) is None
             assert await sessions.send(sid, {"id": 3, **post, "data": {"options": ok}}) is None
             await _until(pushed, 3)
             replies = {p["msg"]["id"]: p["msg"] for p in pushed}
@@ -526,6 +526,9 @@ def test_tailscale_options_only_the_allowed_keys_change(monkeypatch):
             assert replies[3]["success"] is True
             written = [c for c in seen if "options" in c]
             assert written == [{"options": "a0d7b954_tailscale", "data": {"options": ok}}]
+            target = "supervisor/api post /addons/a0d7b954_tailscale/options"
+            refusals = [(r["target"], r["code"]) for r in audit.recent() if not r["ok"]]
+            assert refusals == [(target, "refused_content")] * 2
             await sessions.close_all()
 
     asyncio.run(scenario())

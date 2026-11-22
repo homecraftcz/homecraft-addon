@@ -380,6 +380,8 @@ def test_the_tailscale_http_package_passes():
         TAILSCALE_HTTP.replace("127.0.0.1", "0.0.0.0/0"),
         TAILSCALE_HTTP + "    - 10.0.0.1\n",
         TAILSCALE_HTTP.replace("true", "false"),
+        TAILSCALE_HTTP.replace("true", "1"),  # type-strict
+        "http:\n  1: x\n  a: 2020-01-01\n",  # what JSON cannot sort
         "http:\n  trusted_proxies: [127.0.0.1]\n",
         "http:\n",
         "HTTP:\n  use_x_forwarded_for: true\n  trusted_proxies: [127.0.0.1]\n",

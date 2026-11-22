@@ -182,7 +182,11 @@ verze integrace = nová verze doplňku.
     `frontend`, `lovelace`, `ffmpeg`, `logger`, i s příponou
     (`shell_command 2:`); výjimka je jen `http:` přesně s obsahem
     `use_x_forwarded_for: true` a `trusted_proxies: [127.0.0.1]` (proxy
-    doplňku Tailscale), jakékoli jiné `http:` se odmítne;
+    doplňku Tailscale), jakékoli jiné `http:` se odmítne. Pozor:
+    `trusted_proxies: [127.0.0.1]` znamená, že HA věří hlavičce
+    `X-Forwarded-For` od každého procesu v síti hostitele HA (doplňky
+    s `host_network`), nejen od Tailscale; vlastník to pro proxy Tailscale
+    přijal;
   - `influxdb:` s čímkoli kromě `include`, `exclude` a `ignore_attributes`
     (kam data jdou, nastavuje config flow integrace);
   - `homeassistant:` s `auth_providers`, `packages`, `allowlist_external_dirs`,

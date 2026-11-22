@@ -82,7 +82,7 @@ WS_ALLOWED = [
     sup("/store/addons/a0d7b954_tailscale/install", "post"),
     sup("/addons/a0d7b954_tailscale/start", "post"),
     sup("/addons/a0d7b954_tailscale/restart", "post"),
-    sup("/addons/a0d7b954_tailscale/options", "post"),
+    {**sup("/addons/a0d7b954_tailscale/options", "post"), "data": {"options": {}}},
     sup("/host/info", "get"),
     sup("/host/info"),
     {"id": 4, "type": "network"},
@@ -203,6 +203,11 @@ WS_REFUSED = [
     sup("/addons/a0d7b954_nodered/restart", "post"),
     sup("/addons/a0d7b954_influxdb/options", "post"),
     sup("/addons/a0d7b954_tailscale/options", "get"),
+    sup("/addons/a0d7b954_tailscale/options", "post"),  # no data
+    {**sup("/addons/a0d7b954_tailscale/options", "post"), "data": {}},
+    {**sup("/addons/a0d7b954_tailscale/options", "post"), "data": {"options": []}},
+    {**sup("/addons/a0d7b954_tailscale/options", "post"), "data": {"options": {}, "x": 1}},
+    {**sup("/addons/a0d7b954_influxdb/options", "post"), "data": {"options": {}}},
     sup("/addons/a0d7b954_tailscale/restart", "get"),
     sup("/addons/a0d7b954_tailscale/stop", "post"),
     sup("/addons/a0d7b954_tailscale/uninstall", "post"),
@@ -482,8 +487,8 @@ def ts(**changes):
     [
         ts(),
         ts(advertise_routes=["192.168.1.0/24"], share_homeassistant="serve"),
-        ts(advertise_routes=["10.0.0.0/8", "172.16.5.0/24", "192.168.1.10"]),
-        ts(advertise_routes=["192.168.1.7/24"]),  # host bits: strict=False
+        ts(advertise_routes=["10.0.0.0/8", "172.16.5.0/24", "192.168.1.10/32"]),
+        ts(userspace_networking=True),  # same value
         ts(advertise_routes=[]),
         ts(share_homeassistant="disabled"),
     ],
@@ -505,6 +510,14 @@ def test_tailscale_options_allowed(new):
         (ts(advertise_routes=["fd7a:115c:a1e0::/48"]), "advertise_routes"),
         (ts(advertise_routes="192.168.1.0/24"), "advertise_routes"),
         (ts(advertise_routes=[3232235776]), "advertise_routes"),
+        (ts(advertise_routes=["192.168.1.7/24"]), "advertise_routes"),  # host bits
+        (ts(advertise_routes=["192.168.1.10"]), "advertise_routes"),  # bare host
+        (ts(advertise_routes=["192.168.1.0/255.255.255.0"]), "advertise_routes"),
+        (ts(advertise_routes=["10.0.0.0/08"]), "advertise_routes"),
+        (ts(share_homeassistant=[]), "share_homeassistant: []"),
+        (ts(share_homeassistant={}), "share_homeassistant: {}"),
+        (ts(userspace_networking=1), "klíč userspace_networking"),  # True before: type-strict
+        (ts(share_homeassistant="X" * 100), "share_homeassistant: 'XXX"),
         ({"options": {"share_homeassistant": "serve"}}, "klíč advertise_routes"),  # dropped
         (TS_CURRENT, "tvar dat"),
         ({**ts(), "x": 1}, "tvar dat"),
@@ -517,3 +530,10 @@ def test_tailscale_options_refused(new, refused):
 
 def test_tailscale_options_need_the_current_ones():
     assert tailscale_options_refused(ts(), None) == "neznámé aktuální volby"
+
+
+def test_tailscale_refusal_does_not_echo_long_values():
+    found = tailscale_options_refused(ts(share_homeassistant="x" * 1000), TS_CURRENT)  # > 40: repr
+    assert len(found) < 80 and found.endswith("…")
+    found = tailscale_options_refused({"options": {**TS_CURRENT, "k" * 500: 1}}, TS_CURRENT)
+    assert len(found) < 80

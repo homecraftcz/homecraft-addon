@@ -108,12 +108,94 @@ NOTIFICATION_FIELDS = {
     "dismiss": {"notification_id"},
 }
 
-# Add-ons features reach (library `"type": "addon"`); the ones with
-# `install: true` may also be installed and started (addon_install).
-# Tailscale (homecraft M55): addon_options writes its options and restarts it;
-# ws_proxy checks each options write against the live ones (tailscale_options_refused).
+# Tailscale (homecraft M55): addon_options writes its options and restarts it.
 TAILSCALE_ADDON = "a0d7b954_tailscale"
 TAILSCALE = frozenset({TAILSCALE_ADDON})
+# The only Tailscale options Homecraft may change, and their allowed values:
+# private IPv4 subnets (no `local_subnets`, IPv6 or public ranges), never `funnel`.
+TAILSCALE_ROUTE_NETS = tuple(
+    ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+TAILSCALE_SHARE = frozenset({"serve", "disabled"})
+
+
+def canonical(value: object) -> str:
+    """Type-strict equality: `1` and `True` differ. Anything JSON cannot sort
+    (mixed key types from YAML) falls back to repr, never equal to a JSON dump."""
+    try:
+        return json.dumps(value, sort_keys=True, default=repr)
+    except (TypeError, ValueError):
+        return repr(value)
+
+
+def short(value: object) -> str:
+    """An untrusted value in a message or log: its repr (a plain name bare),
+    at most 40 chars."""
+    if isinstance(value, str) and re.fullmatch(r"[a-z0-9_]{1,40}", value):
+        return value  # an option name or a plain word as it is
+    r = repr(value)
+    return r if len(r) <= 40 else r[:39] + "…"
+
+
+def _private_route(route: object) -> bool:
+    """Canonical only: `192.168.1.0/24`, not a host, a netmask or `/08`."""
+    if not isinstance(route, str):
+        return False
+    try:
+        net = ipaddress.ip_network(route, strict=True)
+    except ValueError:
+        return False
+    return (
+        str(net) == route
+        and net.version == 4
+        and any(net.subnet_of(p) for p in TAILSCALE_ROUTE_NETS)
+    )
+
+
+TAILSCALE_KEYS = {
+    "advertise_routes": lambda v: isinstance(v, list) and all(map(_private_route, v)),
+    "share_homeassistant": lambda v: isinstance(v, str) and v in TAILSCALE_SHARE,
+}
+
+
+def tailscale_options_refused(new: object, current: object) -> str | None:
+    """`POST /addons/a0d7b954_tailscale/options` data (`{"options": {...}}`, the
+    full options) against `current` (`options` of its info just before): only
+    TAILSCALE_KEYS may differ, each to an allowed value. The refused item or None."""
+    if not _options_data(new):
+        return "tvar dat"
+    if not isinstance(current, dict):
+        return "neznámé aktuální volby"
+    options = new["options"]
+    for key in [*current, *(k for k in options if k not in current)]:
+        if key in options and key in current and canonical(options[key]) == canonical(current[key]):
+            continue  # unchanged: the user's own value never blocks Homecraft
+        if key not in options or key not in TAILSCALE_KEYS:
+            return f"klíč {short(key)}"
+        if not TAILSCALE_KEYS[key](options[key]):
+            return f"{key}: {short(options[key])}"
+    return None
+
+
+def _options_data(data: object) -> bool:
+    return isinstance(data, dict) and set(data) == {"options"} and isinstance(data["options"], dict)
+
+
+# Add-ons whose options Homecraft may write -> the check of a write against
+# the live options (ws_proxy reads them from the Supervisor just before).
+ADDON_OPTIONS_CHECKS = {TAILSCALE_ADDON: tailscale_options_refused}
+_OPTIONS_RE = re.compile(r"/addons/([a-z0-9_]+)/options")
+
+
+def addon_options_check(endpoint: object):
+    """(slug, its check) for an add-on options endpoint, else None."""
+    m = _OPTIONS_RE.fullmatch(endpoint) if isinstance(endpoint, str) else None
+    slug = m.group(1) if m else None
+    return (slug, ADDON_OPTIONS_CHECKS[slug]) if slug in ADDON_OPTIONS_CHECKS else None
+
+
+# Add-ons features reach (library `"type": "addon"`); the ones with
+# `install: true` may also be installed and started (addon_install).
 ADDONS = frozenset(
     {"a0d7b954_nodered", "a889bffc_go2rtc", "a0d7b954_influxdb", "a0d7b954_grafana", *TAILSCALE}
 )
@@ -124,51 +206,10 @@ _SUPERVISOR = [
     (re.compile(r"/store/addons/([a-z0-9_]+)/install"), "post", INSTALLABLE),
     (re.compile(r"/addons/([a-z0-9_]+)/start"), "post", INSTALLABLE),
     (re.compile(r"/addons/([a-z0-9_]+)/restart"), "post", TAILSCALE),
-    (re.compile(r"/addons/([a-z0-9_]+)/options"), "post", TAILSCALE),
+    (_OPTIONS_RE, "post", frozenset(ADDON_OPTIONS_CHECKS)),
     (re.compile(r"/ingress/session()"), "post", frozenset({""})),
     (re.compile(r"/host/info()"), "get", frozenset({""})),  # the inventory: HA's hostname
 ]
-# The only Tailscale options Homecraft may change, and their allowed values:
-# private IPv4 subnets (no `local_subnets`, IPv6 or public ranges), never `funnel`.
-TAILSCALE_ROUTE_NETS = tuple(
-    ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
-)
-TAILSCALE_SHARE = frozenset({"serve", "disabled"})
-
-
-def _private_route(route: object) -> bool:
-    if not isinstance(route, str):
-        return False
-    try:
-        net = ipaddress.ip_network(route, strict=False)
-    except ValueError:
-        return False
-    return net.version == 4 and any(net.subnet_of(p) for p in TAILSCALE_ROUTE_NETS)
-
-
-TAILSCALE_KEYS = {
-    "advertise_routes": lambda v: isinstance(v, list) and all(map(_private_route, v)),
-    "share_homeassistant": lambda v: v in TAILSCALE_SHARE,
-}
-
-
-def tailscale_options_refused(new: object, current: object) -> str | None:
-    """`POST /addons/a0d7b954_tailscale/options` data (`{"options": {...}}`, the
-    full options) against `current` (`options` of its info just before): only
-    TAILSCALE_KEYS may differ, each to an allowed value. The refused item or None."""
-    if not isinstance(new, dict) or set(new) != {"options"} or not isinstance(new["options"], dict):
-        return "tvar dat"
-    if not isinstance(current, dict):
-        return "neznámé aktuální volby"
-    options = new["options"]
-    for key in [*current, *(k for k in options if k not in current)]:
-        if key in options and key in current and options[key] == current[key]:
-            continue  # unchanged: the user's own value never blocks Homecraft
-        if key not in options or key not in TAILSCALE_KEYS:
-            return f"klíč {key}"
-        if not TAILSCALE_KEYS[key](options[key]):
-            return f"{key}: {options[key]}"
-    return None
 
 
 def _supervisor_allowed(endpoint: object, method: object) -> bool:
@@ -278,6 +319,8 @@ def ws_allowed(msg: object) -> bool:
             return _schedule_edit_allowed(msg.get("service_data"))
         return service in RELOAD_SERVICES and "service_data" not in msg and "target" not in msg
     if t == "supervisor/api":
+        if _OPTIONS_RE.fullmatch(str(msg.get("endpoint"))) and not _options_data(msg.get("data")):
+            return False  # the full options only; ws_proxy compares them with the live ones
         return _supervisor_allowed(msg.get("endpoint"), msg.get("method"))
     return False
 
