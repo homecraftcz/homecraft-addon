@@ -32,6 +32,7 @@ def rendered() -> list[dict]:
 
 def test_the_features_with_checked_content_are_all_seen(rendered):
     assert {r["feature"] for r in rendered} == {
+        "automations",
         "bento",
         "cameras",
         "energy",
