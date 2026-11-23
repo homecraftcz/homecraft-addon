@@ -111,7 +111,8 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   doplní chybějící jméno v síti. Hesla se nezadávají: URL jen `http`, `https`,
   `rtsp` a `rtsps`, bez `jméno:heslo@`. Seznam je v `/data/network_devices.json`
   (přežije restart). Homecraft ho smí jen přečíst (operace
-  `network_devices.get`, v auditu **Síť (feature …)**), změnit ho nesmí.
+  `network_devices.get`, v auditu **Síť (feature …)**), změnit ho nesmí;
+  jen jednou do něj přenese svá dřívější zařízení (`network_devices.import`).
   Počet zařízení je i na dlaždici na Přehledu.
 - **Audit**: posledních 200 operací (čas, operace, cíl, výsledek, trvání).
   Cíl je typ příkazu WebSocketu, metoda a cesta HTTP nebo cesta souboru,
@@ -137,6 +138,10 @@ jiného odmítne s chybou `not_allowed`.
 Seznam síťových zařízení ze záložky **Síť** smí Homecraft jen přečíst
 (`network_devices.get`): adresy, URL, MAC a poznámky, žádná hesla. Požadavek
 nese název feature, která adresu potřebuje; ten se zapíše do auditu.
+Jedinou výjimkou je jednorázový přesun dřívějšího seznamu z Homecraftu
+(`network_devices.import`, v auditu **Síť (import z Homecraftu)**): doplněk
+přidá jen nová zařízení (shoda podle IP nebo MAC) a uloženým doplní prázdná
+pole, nic nepřepíše ani nesmaže.
 
 Integrace z Marketplace / HACS: doplněk smí přečíst seznam repozitářů
 (`marketplace/repositories/list`, `hacs/repositories/list`) a nechat
