@@ -39,3 +39,14 @@ def test_paused_survives_a_restart():
 def test_unreadable_state_is_not_paused(data_dir):
     (data_dir / "state.json").write_text("[1]")
     assert state.load_paused() is False
+
+
+def test_pause_and_consent_keep_each_other(data_dir):
+    assert state.load_error_reports() is False
+    state.save_error_reports(True)
+    state.save_paused(True)
+    assert state.load_error_reports() is True and state.load_paused() is True
+    state.save_error_reports(False)
+    assert state.load_paused() is True and state.load_error_reports() is False
+    (data_dir / "state.json").write_text('{"error_reports": "yes"}')
+    assert state.load_error_reports() is False

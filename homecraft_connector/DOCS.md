@@ -125,12 +125,34 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   `network_devices.get`, v auditu **Síť (feature …)**), změnit ho nesmí;
   jen jednou do něj přenese svá dřívější zařízení (`network_devices.import`).
   Počet zařízení je i na dlaždici na Přehledu.
+- **Chybová hlášení** (na Přehledu, ve výchozím stavu vypnuto): přepínač
+  **Posílat chybová hlášení Homecraftu** je souhlas zákazníka. Dokud je vypnutý,
+  doplněk v Home Assistantu žádné události neodebírá. Zapnutý odebírá
+  `homecraft_error` (chyby z Node-RED) a `system_log_event` úrovně `ERROR`
+  a `CRITICAL`, ale jen z automatizací a skriptů Homecraftu: logger
+  `homeassistant.components.automation.<entita>` nebo `…script.<klíč>`. Rozhoduje
+  ID z konfigurace (u automatizace atribut `id` její entity, u skriptu klíč),
+  ne ID entity: musí být v `packages/hfb_*.yaml` se značkou `# ha-builder:`
+  (feature a verze z balíčku), nebo začínat `hfb_`. Vlastní automatizace
+  a skripty zákazníka se neposílají nikdy (ani když jejich entita má ID, které
+  by jinak dostala automatizace Homecraftu), traceback (`exception`) také ne, jen první
+  řádek zprávy. HA vyvolá `system_log_event` jen s `system_log: fire_event: true`
+  v `configuration.yaml` (doplněk ho nezapisuje). Posílají se jen pole
+  z pevného seznamu v kódu doplňku (feature, verze, druh, kód, zdroj, uzel,
+  entita, oblast, okruh, zpráva do 500 znaků, stopa rozhodnutí nejvýš 50
+  plochých záznamů a 12 kB), ostatní se zahodí. Stejná chyba odejde hned
+  a pak nejvýš jednou za 10 minut jako jedno hlášení s počtem výskytů.
+  Homecraftu jde zprávou `errors.report` po stávajícím spojení (nejvýš 20
+  hlášení v jedné zprávě). Bez spojení s Homecraftem nebo při pauze doplněk
+  události neodebírá a čekající hlášení zahodí, nic se neukládá na disk ani
+  do logu. Nastavení přežije restart.
 - **Audit**: posledních 200 operací (čas, operace, cíl, výsledek, trvání).
   Cíl je typ příkazu WebSocketu, metoda a cesta HTTP nebo cesta souboru,
-  nikdy obsah souborů, těla požadavků ani tokeny. Soubor `/data/audit.jsonl`
+  u odeslané zprávy s chybovými hlášeními (`errors.report`) jen počet hlášení a jejich kódy,
+  nikdy obsah souborů, těla požadavků, stopa, zpráva ani tokeny. Soubor `/data/audit.jsonl`
   drží posledních 1000 záznamů.
 
-Změny v panelu (token, pauza, připojení, síťová zařízení) přijme doplněk jen s tajnou hodnotou,
+Změny v panelu (token, pauza, chybová hlášení, připojení, síťová zařízení) přijme doplněk jen s tajnou hodnotou,
 kterou při každém startu vloží do stránky panelu. Cizí stránka ji nezná.
 Skript ze stejného původu (cokoli, co běží v Home Assistantu) si ale stránku
 panelu načíst a hodnotu přečíst může.

@@ -1,4 +1,5 @@
-"""The panel's switches that survive a restart: /data/state.json (#556)."""
+"""The panel's switches that survive a restart: /data/state.json (#556) holds
+`paused` and `error_reports` (#31); saving one keeps the other."""
 
 import json
 
@@ -10,12 +11,30 @@ def _path():
     return settings.DATA_DIR / "state.json"
 
 
-def load_paused() -> bool:
+def _load() -> dict:
     try:
-        return json.loads(_path().read_text()).get("paused") is True
-    except (FileNotFoundError, ValueError, AttributeError):
-        return False
+        data = json.loads(_path().read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save(**changes: object) -> None:
+    write_private(_path(), json.dumps({**_load(), **changes}).encode())
+
+
+def load_paused() -> bool:
+    return _load().get("paused") is True
 
 
 def save_paused(paused: bool) -> None:
-    write_private(_path(), json.dumps({"paused": bool(paused)}).encode())
+    _save(paused=bool(paused))
+
+
+def load_error_reports() -> bool:
+    """Consent to send error reports to Homecraft; off unless switched on."""
+    return _load().get("error_reports") is True
+
+
+def save_error_reports(enabled: bool) -> None:
+    _save(error_reports=bool(enabled))
