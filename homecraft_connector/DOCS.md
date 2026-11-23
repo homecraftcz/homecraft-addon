@@ -110,8 +110,9 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   posílá jen anonymní dotazy do domácí sítě. U už uloženého zařízení jen
   doplní chybějící jméno v síti. Hesla se nezadávají: URL jen `http`, `https`,
   `rtsp` a `rtsps`, bez `jméno:heslo@`. Seznam je v `/data/network_devices.json`
-  (přežije restart) a Homecraft ho zatím nečte. Počet zařízení je i na
-  dlaždici na Přehledu.
+  (přežije restart). Homecraft ho smí jen přečíst (operace
+  `network_devices.get`, v auditu **Síť (feature …)**), změnit ho nesmí.
+  Počet zařízení je i na dlaždici na Přehledu.
 - **Audit**: posledních 200 operací (čas, operace, cíl, výsledek, trvání).
   Cíl je typ příkazu WebSocketu, metoda a cesta HTTP nebo cesta souboru,
   nikdy obsah souborů, těla požadavků ani tokeny. Soubor `/data/audit.jsonl`
@@ -132,6 +133,10 @@ integrací, které zakládá Apply: InfluxDB, SQL, Speedtest, Ping, Holiday,
 System Monitor, Scheduler a Browser Mod) a soubory jen v `packages/`,
 `custom_templates/` a `themes/` (`configuration.yaml` jen ke čtení). Cokoli
 jiného odmítne s chybou `not_allowed`.
+
+Seznam síťových zařízení ze záložky **Síť** smí Homecraft jen přečíst
+(`network_devices.get`): adresy, URL, MAC a poznámky, žádná hesla. Požadavek
+nese název feature, která adresu potřebuje; ten se zapíše do auditu.
 
 Integrace z Marketplace / HACS: doplněk smí přečíst seznam repozitářů
 (`marketplace/repositories/list`, `hacs/repositories/list`) a nechat

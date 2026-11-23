@@ -8,7 +8,7 @@ import pytest
 from aiohttp import web
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from connector import audit, client, settings
+from connector import audit, client, network_devices, settings
 from connector.client import Client
 
 
@@ -112,6 +112,27 @@ def test_packages_include_op(tmp_path, monkeypatch):
     got = run_against_homecraft([{"id": 1, "op": "config.packages_include"}], expect=1)
     assert got == [{"id": 1, "ok": True, "result": "present"}]
     assert client._audit_target({"op": "config.packages_include"}) == "configuration.yaml"
+
+
+def test_network_devices_get_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(client.socket, "gethostname", lambda: "a1b2c3d4-homecraft-connector")
+    network_devices.save([{"name": "Brána", "kind": "shelly_gateway", "address": "10.0.0.10"}])
+    got = run_against_homecraft(
+        [
+            {"id": 1, "op": "network_devices.get", "feature": "cameras"},
+            {"id": 2, "op": "network_devices.get", "feature": {"x": 1}},
+        ],
+        expect=2,
+    )
+    by_id = {g["id"]: g for g in got}
+    assert by_id[1]["ok"] is True
+    assert by_id[1]["result"]["slug"] == "a1b2c3d4_homecraft_connector"
+    assert [d["address"] for d in by_id[1]["result"]["devices"]] == ["10.0.0.10"]
+    assert by_id[2]["error"]["code"] == "bad_request"
+    target = client._audit_target({"op": "network_devices.get", "feature": "cameras"})
+    assert target == "Síť (feature cameras)"
+    assert client._audit_target({"op": "network_devices.get"}) == "Síť"
 
 
 def test_card_write_passes_the_signature(tmp_path, monkeypatch, card_key):

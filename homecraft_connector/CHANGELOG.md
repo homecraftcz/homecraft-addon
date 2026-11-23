@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0
+
+- Homecraft čte seznam síťových zařízení ze záložky **Síť** novou operací
+  `network_devices.get` (jen čtení). Feature, která adresu potřebuje, se
+  posílá s požadavkem a v auditu je vidět jako **Síť (feature …)**. Homecraft
+  seznam nemůže změnit; spravuje se jen v panelu doplňku.
+- Odpověď nese i slug doplňku, aby Homecraft mohl odkázat na tento panel
+  („Spravovat v Home Assistantu“).
+
 ## 0.19.0
 
 - Záložka **Síť** má tlačítko **Doporučený sken**: doplněk sám proskenuje
