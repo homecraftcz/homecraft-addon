@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.22.0
+
+- Nová záložka **Features**: co Homecraft nainstaloval do Home Assistantu,
+  jen pro čtení. Každá feature má dlaždici s verzí (a dostupnou novější),
+  instancemi, časem posledního Apply, stavem (**Běží**, **Aktualizace**,
+  **Chyba doplňku**), soubory (`packages/hfb_*.yaml`) a síťovými zařízeními,
+  která používá. Odkaz **Otevřít projekt v Homecraftu** vede do projektu.
+- Souhrn posílá Homecraft po každém Apply a po připojení novou operací
+  `features.report` (i během pauzy: týká se jen panelu, ne Home Assistantu);
+  doplněk ho uloží do `/data/features.json` a panel ho čte při každém
+  načtení, takže se změna ukáže bez restartu. V auditu **Features (počet)**.
+- Přehled má dlaždici **Features** (počet a počet dostupných aktualizací),
+  sloupec **Používá** v záložce **Síť** ukazuje features podle souhrnu.
+
 ## 0.21.0
 
 - Jednorázový přesun síťových zařízení z Homecraftu: nová operace

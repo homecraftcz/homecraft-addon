@@ -40,7 +40,7 @@ def test_page_and_status(run_panel):
     assert status["connected"] is False and status["paused"] is False
     assert status["token_set"] is False
     assert status["audit_24h"] == {"count": 0, "refused": 0, "capped": False}
-    for tab in ("overview", "network", "security", "audit"):
+    for tab in ("overview", "features", "network", "security", "audit"):
         assert f'href="#{tab}"' in html and f'data-tab="{tab}"' in html
 
 
