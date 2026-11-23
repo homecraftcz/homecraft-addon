@@ -97,6 +97,17 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   s tlačítkem **Aktualizovat znovu**. Položku, kterou Homecraft nenabízí, nebo
   druhé kliknutí do 5 s Homecraft nenainstaluje a jen pošle aktuální seznam.
   Pozastavený doplněk tlačítka zakáže a nic nepošle.
+- **Features**: co Homecraft nainstaloval do Home Assistantu, jen pro čtení.
+  Dlaždice feature: verze (a dostupná novější), instance, čas posledního
+  Apply, stav **Běží** / **Aktualizace** / **Chyba doplňku** (s hláškou),
+  soubory (`packages/hfb_*.yaml`) a síťová zařízení, která používá (ta jsou
+  i ve sloupci **Používá** záložky **Síť**). Odkaz **Otevřít projekt
+  v Homecraftu** pošle Homecraft (jen `http`/`https`). Souhrn posílá Homecraft
+  po každém Apply a po připojení (operace `features.report`, i během pauzy:
+  týká se jen panelu, ne Home Assistantu; v auditu **Features (počet)**).
+  Doplněk ho uloží do `/data/features.json` (nejvýš 100 features, delší texty
+  odmítne) a panel ho čte při každém načtení. Na Přehledu je dlaždice
+  **Features** s počtem a počtem dostupných aktualizací.
 - **Síť**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
   v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
   typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru

@@ -1,5 +1,6 @@
 """The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause, the audit and the network devices (#631) with their LAN scan (#633).
+pause, the audit, the network devices (#631) with their LAN scan (#633) and the
+features Homecraft installed (homecraftcz/homecraft#636).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -24,6 +25,7 @@ from aiohttp import web
 from . import (
     access_token,
     audit,
+    features,
     ha_token,
     network_devices,
     network_discovery,
@@ -197,6 +199,11 @@ async def _run_update(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def _features(request: web.Request) -> web.Response:
+    """Read on each request: a new summary shows without a restart."""
+    return web.json_response(features.load())
+
+
 async def _network_devices(request: web.Request) -> web.Response:
     return web.json_response(network_devices.load())
 
@@ -277,6 +284,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_post("/api/reconnect", _reconnect)
     app.router.add_get("/api/updates", _updates)
     app.router.add_post("/api/updates/run", _run_update)
+    app.router.add_get("/api/features", _features)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_get("/api/network-devices/ha", _ha_candidates)

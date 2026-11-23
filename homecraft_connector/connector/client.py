@@ -18,6 +18,7 @@ from . import (
     access_token,
     audit,
     core_config,
+    features,
     files,
     http_proxy,
     identity,
@@ -508,6 +509,12 @@ class Client:
             except (KeyError, TypeError, ValueError):
                 return _error(rid, "bad_request", "updates.set: invalid items")
             return {"id": rid, "ok": True, "result": None}
+        if op == "features.report":  # the panel's Features tab (#636), never HA: during a pause too
+            try:
+                features.save(request)
+            except ValueError as e:
+                return _error(rid, "bad_request", f"features.report: {e}")
+            return {"id": rid, "ok": True, "result": None}
         if self.paused and op != "ws.close":  # Homecraft may still close its sessions
             return _error(rid, "paused", "")
         try:
@@ -581,6 +588,9 @@ def _audit_target(req: dict) -> str:
         return str(req.get("path"))
     if op == "config.packages_include":
         return core_config.FILE
+    if op == "features.report":
+        report = req.get("features")
+        return f"Features ({len(report)})" if isinstance(report, list) else "Features"
     if op == "network_devices.get":
         feature = req.get("feature")
         return f"Síť (feature {feature})" if feature else "Síť"

@@ -92,6 +92,14 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
   border-radius: 10px; background: var(--bg); }
 .prof input { flex: none; margin-top: 2px; }
 .prof .muted { font-size: 13px; }
+#featTiles { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+.feat { display: flex; flex-direction: column; gap: 10px; }
+.feat h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.feat dl { margin: 0; font-size: 13px; gap: 4px 14px; }
+.feat .err { color: var(--bad); font-size: 13px; }
+a.feat-link { align-items: center; justify-content: center; text-align: center; border-style: dashed;
+  color: inherit; text-decoration: none; min-height: 130px; gap: 6px; }
+a.feat-link:hover { border-color: var(--accent); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -107,6 +115,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
 
   <nav class="tabs" aria-label="Sekce">
     <a href="#overview">Přehled</a>
+    <a href="#features">Features</a>
     <a href="#network">Síť</a>
     <a href="#security">Zabezpečení</a>
     <a href="#audit">Audit</a>
@@ -122,6 +131,12 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
       <span class="tile-k">Zabezpečení</span>
       <span class="tile-big tile-text" id="tSec">–</span>
       <span class="muted" id="tSecSub"></span>
+    </a>
+    <a class="card tile" href="#features">
+      <span class="tile-k">Features</span>
+      <span class="tile-big" id="tFeat">–</span>
+      <span class="muted" id="tFeatSub"></span>
+      <span><span class="badge" id="tFeatUpd">0 aktualizací</span></span>
     </a>
     <a class="card tile" href="#network">
       <span class="tile-k">Síťová zařízení</span>
@@ -155,6 +170,16 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
     <p id="updatesEmpty" class="muted">–</p>
     <div id="updatesMsg" class="msg"></div>
   </section>
+
+  <div data-tab="features" class="stack" hidden>
+    <div>
+      <h2 style="margin:0">Features v tomto domě</h2>
+      <div class="muted">Co Homecraft nainstaloval do Home Assistantu. Nastavení a aktualizace jsou
+        v Homecraftu, tady je jen přehled.</div>
+    </div>
+    <div class="tiles" id="featTiles"></div>
+    <p id="featEmpty" class="muted">Souhrn pošle Homecraft po připojení a po každém Apply.</p>
+  </div>
 
   <div data-tab="network" class="stack" hidden>
   <section class="card">
@@ -502,9 +527,103 @@ async function refreshUpdates() {
   $("updatesEmpty").textContent = s.connected ? "Vše je aktuální." : "Seznam pošle Homecraft po připojení.";
 }
 
+// --- Features Homecraft installed (homecraft#636) -------------------------
+const FEAT_STATUS = { running: ["Běží", "on"], update: ["Aktualizace", "infob"], addon_error: ["Chyba doplňku", "warnb"] };
+let feats = { project_url: "", features: [], received_at: null };
+let lastFeats = null;
+
+function featTile(f) {
+  const art = document.createElement("article");
+  art.className = "card feat";
+  const head = document.createElement("div");
+  head.className = "row";
+  const h = document.createElement("h2");
+  h.textContent = f.name;
+  const [label, cls] = FEAT_STATUS[f.status] || [f.status, "grayb"];
+  const badge = document.createElement("span");
+  badge.className = "badge " + cls;
+  badge.style.marginLeft = "auto";
+  badge.textContent = label;
+  head.append(h, badge);
+  const dl = document.createElement("dl");
+  const version = f.available && f.available !== f.version ? f.version + " → " + f.available : f.version;
+  for (const [k, v, mono] of [
+    ["Verze", version || "–", true],
+    ["Instance", f.instances.join(", ") || "–"],
+    ["Apply", fmtTime(f.applied_at)],
+    ["Soubory", f.files.join("\n") || "–", true],
+  ]) {
+    const dt = document.createElement("dt");
+    dt.textContent = k;
+    const dd = document.createElement("dd");
+    dd.textContent = v;
+    if (mono) dd.className = "mono";
+    dd.style.whiteSpace = "pre-line";
+    dl.append(dt, dd);
+  }
+  art.append(head, dl);
+  if (f.error) {
+    const err = document.createElement("div");
+    err.className = "err";
+    err.textContent = f.error;
+    art.append(err);
+  }
+  const net = document.createElement("div");
+  net.className = "muted";
+  net.style.fontSize = "13px";
+  net.textContent = "Síť: " + (f.devices.map(deviceName).join(", ") || "nepoužívá");
+  art.append(net);
+  return art;
+}
+
+function deviceName(address) {
+  const d = devices.find((x) => x.address === address || x.hostname === address);
+  return d ? d.name : address;
+}
+
+function renderFeatures() {
+  const list = feats.features;
+  const upd = list.filter((f) => f.status === "update").length;
+  $("tFeat").textContent = list.length;
+  const last = Math.max(0, ...list.map((f) => f.applied_at || 0));
+  $("tFeatSub").textContent = last ? "Poslední Apply " + fmtTime(last)
+    : feats.received_at ? "Homecraft zatím nic nenainstaloval" : "Souhrn pošle Homecraft po připojení";
+  $("tFeatUpd").textContent = upd + (upd >= 1 && upd <= 4 ? " aktualizace" : " aktualizací");
+  $("tFeatUpd").className = "badge " + (upd ? "infob" : "");
+  const tiles = list.map(featTile);
+  if (feats.project_url) {
+    const a = document.createElement("a");
+    a.className = "card feat feat-link";
+    a.href = feats.project_url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    const strong = document.createElement("strong");
+    strong.textContent = "Otevřít projekt v Homecraftu";
+    const sub = document.createElement("span");
+    sub.className = "muted";
+    sub.textContent = "přidání a nastavení features";
+    a.append(strong, sub);
+    tiles.push(a);
+  }
+  $("featTiles").replaceChildren(...tiles);
+  $("featEmpty").hidden = list.length > 0;
+  $("featEmpty").textContent = feats.received_at ? "Homecraft do tohoto Home Assistantu zatím nic nenainstaloval."
+    : "Souhrn pošle Homecraft po připojení a po každém Apply.";
+}
+
+async function refreshFeatures() {
+  const f = await call("GET", "api/features");
+  const json = JSON.stringify(f);
+  if (json === lastFeats) return;  // redraw only on a change
+  lastFeats = json;
+  feats = f;
+  renderFeatures();
+  renderDevices();  // the Používá column
+}
+
 async function refresh() {
   try {
-    await Promise.all([refreshStatus(), refreshAudit(), refreshUpdates()]);
+    await Promise.all([refreshStatus(), refreshAudit(), refreshUpdates(), refreshFeatures()]);
   } catch (e) {
     show("connMsg", "Panel se nepodařilo načíst: " + e.message, true);
   }
@@ -631,6 +750,12 @@ function urlCell(urls) {
   return td;
 }
 
+function usedBy(d) {
+  const names = feats.features.filter((f) => f.devices.includes(d.address) || (d.hostname && f.devices.includes(d.hostname)))
+    .map((f) => f.name);
+  return names.length ? cell(names.join(", "), "wrap") : cell("—", "muted");
+}
+
 function renderDevices() {
   const counts = {};
   for (const d of devices) counts[d.kind] = (counts[d.kind] || 0) + 1;
@@ -678,7 +803,7 @@ function renderDevices() {
       b.onclick = () => openDevice(i);
       act.append(b);
       tr.append(name, cell(NET_KINDS[d.kind] || d.kind), cell(d.address, "mono"),
-        cell(d.hostname || "—", "mono"), urlCell(d.urls), src, cell("—", "muted"), act);
+        cell(d.hostname || "—", "mono"), urlCell(d.urls), src, usedBy(d), act);
       return tr;
     }));
   $("netTable").hidden = devices.length === 0;
@@ -688,6 +813,7 @@ function renderDevices() {
 async function loadDevices() {
   devices = await call("GET", "api/network-devices");
   renderDevices();
+  renderFeatures();  // device names on the Features tiles
 }
 
 function disarmNetDelete() {
