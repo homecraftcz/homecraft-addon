@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.23.0
+
+- Přepínač **Posílat chybová hlášení Homecraftu** na Přehledu (ve výchozím
+  stavu vypnutý): se souhlasem doplněk posílá Homecraftu chyby automatizací
+  a skriptů Homecraftu (`system_log_event` úrovně ERROR a CRITICAL) a chyby
+  z Node-RED (`homecraft_error`), aby šlo zjistit příčinu a automatizaci
+  opravit. Jen povolená pole z pevného seznamu v doplňku, stejná chyba nejvýš
+  jednou za 10 minut s počtem výskytů. Vlastní automatizace zákazníka se
+  neposílají nikdy. Bez spojení nebo při pauze se hlášení zahodí. V auditu
+  `errors.report` jen s kódem a entitou.
+
 ## 0.22.0
 
 - Nová záložka **Features**: co Homecraft nainstaloval do Home Assistantu,

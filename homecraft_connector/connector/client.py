@@ -18,6 +18,7 @@ from . import (
     access_token,
     audit,
     core_config,
+    errors,
     features,
     files,
     http_proxy,
@@ -129,6 +130,7 @@ class Client:
         self.server_url = server_url
         self.agent_id, self.key, self.version = agent_id, key, version
         self.paused = paused
+        self.error_reports = False  # consent (#31): set by __main__ and the panel
         # ha_name and fingerprints for a pairing request (fingerprint.Collector):
         # asked before every attempt, it looks up only what is still missing.
         self.hello_extra = hello_extra
@@ -369,6 +371,23 @@ class Client:
         # says what it made of it, a refusal included.
         offered.update(state="running", message="")
 
+    async def report_errors(self, reports: list[dict]) -> None:
+        """`errors.report` (no `id`, no reply), at most errors.MAX_REPORTS per
+        frame. Offline, paused or without consent the reports are dropped."""
+        conn = self._conn
+        if conn is None or not self.connected or self.paused or not self.error_reports:
+            return
+        for i in range(0, len(reports), errors.MAX_REPORTS):
+            chunk = reports[i : i + errors.MAX_REPORTS]
+            try:
+                await conn.send({"op": "errors.report", "reports": chunk})
+            except (ConnectionError, RuntimeError, aiohttp.ClientError):
+                return
+            for r in chunk:  # code and entity only, never the trace or message
+                audit.record(
+                    "errors.report", f"{r['code']} {r.get('entity_id') or ''}".strip(), True
+                )
+
     def _failed(self, outcome: str, message: str) -> str:
         logger.warning("%s", message)
         self.last_error = message
@@ -546,7 +565,8 @@ class _Conn:
     sessions: ws_proxy.Sessions
     http: http_proxy.HttpProxy
     request_rotation: Callable[[], None]  # a token was staged (#565)
-    send: Callable[[dict], Awaitable[None]]  # a message of our own to Homecraft (update.run)
+    # A message of our own to Homecraft (update.run, errors.report).
+    send: Callable[[dict], Awaitable[None]]
     ops: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(MAX_CONCURRENT_OPS))
 
 

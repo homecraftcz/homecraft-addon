@@ -1,6 +1,6 @@
 """The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause, the audit, the network devices (#631) with their LAN scan (#633) and the
-features Homecraft installed (homecraftcz/homecraft#636).
+pause, consent to error reports (#31), the audit, the network devices (#631) with
+their LAN scan (#633) and the features Homecraft installed (homecraftcz/homecraft#636).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -103,6 +103,7 @@ async def _status(request: web.Request) -> web.Response:
             "token_updated_at": access_token.updated_by_homecraft(),
             "ha_token_set": ha_token.load() is not None,
             "paused": client.paused,
+            "error_reports": client.error_reports,
             "audit_24h": audit.summary(time.time() - 86400),
         }
     )
@@ -165,6 +166,15 @@ async def _pause(request: web.Request) -> web.Response:
     await request.app[CLIENT].set_paused(paused)
     logger.info("Homecraft %s v panelu", "pozastaven" if paused else "znovu povolen")
     return web.json_response({"ok": True, "paused": paused})
+
+
+async def _error_reports(request: web.Request) -> web.Response:
+    """Consent to send error reports; errors.Forwarder follows it within FLUSH_EVERY."""
+    enabled = await _json_field(request, "enabled", bool)
+    state.save_error_reports(enabled)
+    request.app[CLIENT].error_reports = enabled
+    logger.info("Chybová hlášení Homecraftu %s v panelu", "zapnuta" if enabled else "vypnuta")
+    return web.json_response({"ok": True, "error_reports": enabled})
 
 
 async def _reconnect(request: web.Request) -> web.Response:
@@ -281,6 +291,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_post("/api/ha-token", _save_ha_token)
     app.router.add_delete("/api/ha-token", _clear_ha_token)
     app.router.add_post("/api/pause", _pause)
+    app.router.add_post("/api/error-reports", _error_reports)
     app.router.add_post("/api/reconnect", _reconnect)
     app.router.add_get("/api/updates", _updates)
     app.router.add_post("/api/updates/run", _run_update)

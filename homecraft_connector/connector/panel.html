@@ -157,6 +157,15 @@ a.feat-link:hover { border-color: var(--accent); }
         Nastavení přežije restart doplňku.</p>
       <div id="pauseMsg" class="msg"></div>
     </section>
+    <section class="card tile">
+      <h2 class="tile-k">Chybová hlášení</h2>
+      <label class="switch"><input type="checkbox" id="errorReports"> Posílat chybová hlášení Homecraftu</label>
+      <p class="muted">Posílají se jen chyby automatizací a skriptů Homecraftu a chyby z Node-RED
+        (<code>homecraft_error</code>), jen povolená pole: feature, verze, kód, uzel, entita,
+        oblast, okruh, zpráva a stopa rozhodnutí. Stejná chyba nejvýš jednou za 10 minut.
+        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.</p>
+      <div id="errorReportsMsg" class="msg"></div>
+    </section>
   </div>
 
   <section class="card" id="updates" data-tab="overview">
@@ -402,6 +411,7 @@ async function refreshStatus() {
   $("verification").textContent = s.verification_code;
   $("pendingBadge").hidden = !s.pending_approval;
   if (document.activeElement !== $("paused")) $("paused").checked = s.paused;
+  if (document.activeElement !== $("errorReports")) $("errorReports").checked = s.error_reports;
   $("tokenSet").hidden = !s.token_set || editingToken;
   $("tokenForm").hidden = s.token_set && !editingToken;
   $("tokenCancel").hidden = !s.token_set;
@@ -644,6 +654,17 @@ $("paused").onchange = async (ev) => {
   } catch (e) {
     ev.target.checked = !ev.target.checked;
     show("pauseMsg", e.message, true);
+  }
+  refresh();
+};
+
+$("errorReports").onchange = async (ev) => {
+  try {
+    await call("POST", "api/error-reports", { enabled: ev.target.checked });
+    show("errorReportsMsg", ev.target.checked ? "Chybová hlášení se posílají Homecraftu." : "Chybová hlášení se neposílají.");
+  } catch (e) {
+    ev.target.checked = !ev.target.checked;
+    show("errorReportsMsg", e.message, true);
   }
   refresh();
 };

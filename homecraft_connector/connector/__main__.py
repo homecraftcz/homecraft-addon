@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 
-from . import audit, fingerprint, identity, panel, selfcheck, settings, state
+from . import audit, errors, fingerprint, identity, panel, selfcheck, settings, state
 from .client import Client
 
 logger = logging.getLogger("connector")
@@ -35,13 +35,14 @@ async def main() -> None:
     # The panel first (the verification code at once); the fingerprints are
     # looked up before each connection attempt until all are found.
     client = Client(server_url, agent_id, key, settings.version(), paused, fingerprint.Collector())
+    client.error_reports = state.load_error_reports()
     await panel.start(client, code, verification)
     try:
         await selfcheck.resolve_ha_url()
         await selfcheck.run()
     except Exception:
         logger.exception("self-check selhal, pokračuji bez něj")
-    await client.run()
+    await asyncio.gather(client.run(), errors.Forwarder(client).run())
 
 
 if __name__ == "__main__":

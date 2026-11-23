@@ -160,3 +160,19 @@ def test_page_carries_the_nonce(run_panel):
 
     html = run_panel(scenario)
     assert f'const NONCE = "{panel.NONCE}"' in html and "{{NONCE}}" not in html
+
+
+def test_error_reports_switch(run_panel, agent):
+    async def scenario(http):
+        fresh = (await (await http.get("/api/status")).json())["error_reports"]
+        page = await (await http.get("/")).text()
+        no_csrf = await http.post("/api/error-reports", json={"enabled": True})
+        bad = await http.post("/api/error-reports", json={"enabled": "yes"}, headers=CSRF)
+        on = await http.post("/api/error-reports", json={"enabled": True}, headers=CSRF)
+        return fresh, page, no_csrf.status, bad.status, on.status, await on.json()
+
+    fresh, page, no_csrf, bad, on, body = run_panel(scenario)
+    assert fresh is False and "Posílat chybová hlášení Homecraftu" in page
+    assert (no_csrf, bad, on) == (403, 400, 200)
+    assert body == {"ok": True, "error_reports": True}
+    assert agent.error_reports is True and state.load_error_reports() is True
