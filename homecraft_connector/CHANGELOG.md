@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0
+
+- Záložka **Síť** má tlačítko **Načíst z HA**: doplněk přečte registr
+  zařízení HA (`configuration_url`, MAC z `connections`) a objevování v síti
+  (`dhcp`/`zeroconf`/`ssdp` `*/subscribe_discovery`) a nabídne kandidáty v
+  dialogu se zaškrtávátky, stejně jako dnes Homecraft. Už uložená zařízení
+  (shoda IP nebo MAC) jsou označená **Už v seznamu** a znovu se nepřidají;
+  přidaná mají zdroj **Z HA**. Jen čtení, nový endpoint panelu
+  `GET /api/network-devices/ha`; URL s přihlašovacími údaji se vynechají.
+
 ## 0.17.0
 
 - Panel má záložku **Síť**: seznam síťových zařízení domácnosti (název, typ,

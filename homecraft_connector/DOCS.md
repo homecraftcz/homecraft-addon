@@ -99,7 +99,9 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   Pozastavený doplněk tlačítka zakáže a nic nepošle.
 - **Síť**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
   v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
-  typu; přidat, upravit, smazat. Hesla se nezadávají: URL jen `http`, `https`,
+  typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru
+  HA a z jeho objevování v síti (DHCP, zeroconf, SSDP); už uložená (stejná IP
+  nebo MAC) jsou označená a nepřidají se znovu. Hesla se nezadávají: URL jen `http`, `https`,
   `rtsp` a `rtsps`, bez `jméno:heslo@`. Seznam je v `/data/network_devices.json`
   (přežije restart) a Homecraft ho zatím nečte. Počet zařízení je i na
   dlaždici na Přehledu.
