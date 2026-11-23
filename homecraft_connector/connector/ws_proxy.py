@@ -34,6 +34,33 @@ def ha_error(msg_id: object, code: str, message: str) -> dict:
     }
 
 
+async def connect(
+    http: aiohttp.ClientSession, url: str | None = None, token: str | None = None
+) -> aiohttp.ClientWebSocketResponse:
+    """An authenticated socket to core as the add-on (through the Supervisor),
+    or at `url` with `token`."""
+    try:
+        ws = await http.ws_connect(
+            url or settings.CORE_WS_URL,
+            max_msg_size=MAX_MSG_SIZE,
+            timeout=aiohttp.ClientWSTimeout(ws_close=AUTH_TIMEOUT),
+        )
+    except (TimeoutError, aiohttp.ClientError, OSError) as e:
+        raise policy.OpError("ha_unreachable", type(e).__name__) from None
+    try:
+        await ws.receive_json(timeout=AUTH_TIMEOUT)  # auth_required
+        await ws.send_json({"type": "auth", "access_token": token or settings.SUPERVISOR_TOKEN})
+        auth = await ws.receive_json(timeout=AUTH_TIMEOUT)
+        if not isinstance(auth, dict) or auth.get("type") != "auth_ok":
+            raise policy.OpError("auth_failed", "HA refused the token")
+    except BaseException as e:
+        await ws.close()
+        if isinstance(e, (TimeoutError, aiohttp.ClientError, OSError, TypeError, ValueError)):
+            raise policy.OpError("ha_unreachable", type(e).__name__) from None
+        raise
+    return ws
+
+
 class Sessions:
     """The HA sessions of one Homecraft connection; `close_all` when it drops."""
 
@@ -69,27 +96,7 @@ class Sessions:
     async def _connect(
         self, url: str | None = None, token: str | None = None
     ) -> aiohttp.ClientWebSocketResponse:
-        """Core as the add-on (through the Supervisor), or at `url` with `token`."""
-        try:
-            ws = await self._http.ws_connect(
-                url or settings.CORE_WS_URL,
-                max_msg_size=MAX_MSG_SIZE,
-                timeout=aiohttp.ClientWSTimeout(ws_close=AUTH_TIMEOUT),
-            )
-        except (TimeoutError, aiohttp.ClientError, OSError) as e:
-            raise policy.OpError("ha_unreachable", type(e).__name__) from None
-        try:
-            await ws.receive_json(timeout=AUTH_TIMEOUT)  # auth_required
-            await ws.send_json({"type": "auth", "access_token": token or settings.SUPERVISOR_TOKEN})
-            auth = await ws.receive_json(timeout=AUTH_TIMEOUT)
-            if not isinstance(auth, dict) or auth.get("type") != "auth_ok":
-                raise policy.OpError("auth_failed", "HA refused the token")
-        except BaseException as e:
-            await ws.close()
-            if isinstance(e, (TimeoutError, aiohttp.ClientError, OSError, TypeError, ValueError)):
-                raise policy.OpError("ha_unreachable", type(e).__name__) from None
-            raise
-        return ws
+        return await connect(self._http, url, token)
 
     async def _pump(self, sid: str, ws: aiohttp.ClientWebSocketResponse) -> None:
         try:

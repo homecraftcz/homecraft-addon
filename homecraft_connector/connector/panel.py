@@ -17,9 +17,19 @@ import secrets
 import time
 from pathlib import Path
 
+import aiohttp
 from aiohttp import web
 
-from . import access_token, audit, ha_token, network_devices, settings, state
+from . import (
+    access_token,
+    audit,
+    ha_token,
+    network_devices,
+    network_discovery,
+    policy,
+    settings,
+    state,
+)
 from .client import Client
 
 logger = logging.getLogger(__name__)
@@ -202,6 +212,19 @@ async def _save_network_devices(request: web.Request) -> web.Response:
     return web.json_response(stored)
 
 
+async def _ha_candidates(request: web.Request) -> web.Response:
+    """Network device candidates from HA (#632); read-only, saves nothing."""
+    try:
+        async with aiohttp.ClientSession() as http:
+            r = await network_discovery.collect(http)
+        return web.json_response(network_discovery.from_ha(r, network_devices.load()))
+    except policy.OpError as e:
+        logger.warning("Načtení zařízení z HA selhalo: %s %s", e.code, e.message)
+        return web.json_response(
+            {"ok": False, "error": f"Home Assistant neodpověděl ({e.code})"}, status=502
+        )
+
+
 def make_app(client: Client, pairing_code: str, verification_code: str) -> web.Application:
     # The network device list is the largest body (200 devices with URLs and notes).
     app = web.Application(middlewares=[_guard], client_max_size=1024 * 1024)
@@ -222,6 +245,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_post("/api/updates/run", _run_update)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
+    app.router.add_get("/api/network-devices/ha", _ha_candidates)
     return app
 
 

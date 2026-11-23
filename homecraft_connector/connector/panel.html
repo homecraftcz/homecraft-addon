@@ -80,6 +80,13 @@ td.name { min-width: 180px; }
 .form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .form .full { grid-column: 1 / -1; }
+dialog { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 20px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--text); }
+dialog[open] { display: flex; flex-direction: column; gap: 12px; }
+dialog > * { min-width: 0; }
+dialog::backdrop { background: rgba(17, 19, 23, .45); }
+dialog .scroll { flex: 1 1 auto; max-height: none; border: 1px solid var(--line); border-radius: 10px; }
+dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -151,7 +158,10 @@ td.name { min-width: 180px; }
         <h2 style="margin:0">Síťová zařízení</h2>
         <div class="muted">Adresy zůstávají v tomto Home Assistantu, bez hesel.</div>
       </div>
-      <button class="primary" id="netAdd" style="margin-left:auto">Přidat ručně</button>
+      <div class="row" style="margin-left:auto">
+        <button id="netHa">Načíst z HA</button>
+        <button class="primary" id="netAdd">Přidat ručně</button>
+      </div>
     </div>
     <div class="row" id="netFilters" style="margin:12px 0"></div>
     <div class="scroll" id="netTable" hidden>
@@ -184,6 +194,26 @@ td.name { min-width: 180px; }
     </form>
     <div id="netFormMsg" class="msg"></div>
   </section>
+
+  <dialog id="netImport" aria-labelledby="netImportTitle">
+    <div class="row">
+      <h2 id="netImportTitle" style="margin:0">Načíst z Home Assistantu</h2>
+      <button type="button" id="netImportClose" aria-label="Zavřít" style="margin-left:auto">×</button>
+    </div>
+    <div class="muted">Zařízení z registru HA a z jeho objevování v síti (DHCP, zeroconf, SSDP).</div>
+    <div class="scroll" id="netImportTable" hidden>
+      <table>
+        <thead><tr><th aria-label="Vybrat"></th><th>Zařízení</th><th>Adresa</th>
+          <th>Jméno v síti</th><th>Stav</th></tr></thead>
+        <tbody id="netImportBody"></tbody>
+      </table>
+    </div>
+    <div id="netImportMsg" class="msg"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" id="netImportCancel">Zrušit</button>
+      <button type="button" class="primary" id="netImportAdd" disabled>Přidat vybraná (0)</button>
+    </div>
+  </dialog>
   </div>
 
   <div data-tab="security" class="stack" hidden>
@@ -680,6 +710,72 @@ $("netDelete").onclick = () => {
   }
   disarmNetDelete();
   saveDevices(devices.filter((_, i) => i !== netEditing), "Zařízení smazáno.");
+};
+
+let candidates = [];
+
+function importCount() {
+  const n = [...$("netImportBody").querySelectorAll("input:checked")].length;
+  $("netImportAdd").textContent = "Přidat vybraná (" + n + ")";
+  $("netImportAdd").disabled = n === 0;
+}
+
+function renderCandidates() {
+  $("netImportBody").replaceChildren(...candidates.map((c, i) => {
+    const tr = document.createElement("tr");
+    const pick = cell("");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.dataset.i = i;
+    box.checked = !c.saved;
+    box.disabled = c.saved;
+    box.setAttribute("aria-label", (c.saved ? "Už v seznamu: " : "Přidat ") + c.name);
+    box.onchange = importCount;
+    pick.append(box);
+    const name = cell("", "wrap name");
+    const strong = document.createElement("strong");
+    strong.textContent = c.name;
+    const sub = document.createElement("div");
+    sub.className = "muted";
+    sub.textContent = [NET_KINDS[c.kind], c.note, c.mac].filter(Boolean).join(" · ");
+    name.append(strong, sub);
+    const state = cell("");
+    const badge = document.createElement("span");
+    badge.className = "badge " + (c.saved ? "grayb" : "warnb");
+    badge.textContent = c.saved ? "Už v seznamu" : "Nové";
+    state.append(badge);
+    tr.append(pick, name, cell(c.address, "mono"), cell(c.hostname || "—", "mono"), state);
+    return tr;
+  }));
+  $("netImportTable").hidden = candidates.length === 0;
+  importCount();
+}
+
+$("netHa").onclick = async () => {
+  candidates = [];
+  renderCandidates();
+  show("netImportMsg", "Načítám z Home Assistantu…");
+  $("netImport").showModal();
+  try {
+    candidates = await call("GET", "api/network-devices/ha");
+    show("netImportMsg", candidates.length ? "" : "Home Assistant žádná síťová zařízení nezná.");
+  } catch (e) {
+    show("netImportMsg", "Načtení se nepovedlo: " + e.message, true);
+  }
+  renderCandidates();
+};
+$("netImportClose").onclick = $("netImportCancel").onclick = () => $("netImport").close();
+$("netImportAdd").onclick = async () => {
+  const picked = [...$("netImportBody").querySelectorAll("input:checked")]
+    .map((box) => candidates[box.dataset.i]);
+  try {
+    devices = await call("PUT", "api/network-devices", [...devices, ...picked]);
+    $("netImport").close();
+    show("netMsg", "Přidáno z HA: " + picked.length + ".");
+  } catch (e) {
+    show("netImportMsg", e.message, true);
+  }
+  renderDevices();
 };
 
 loadDevices().catch((e) => show("netMsg", "Seznam se nepodařilo načíst: " + e.message, true));
