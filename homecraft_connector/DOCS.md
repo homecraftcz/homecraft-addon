@@ -101,7 +101,14 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
   typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru
   HA a z jeho objevování v síti (DHCP, zeroconf, SSDP); už uložená (stejná IP
-  nebo MAC) jsou označená a nepřidají se znovu. Hesla se nezadávají: URL jen `http`, `https`,
+  nebo MAC) jsou označená a nepřidají se znovu. **Doporučený sken** projde
+  podsíť domácnosti (z Supervisoru `/network/info`; jen soukromá IPv4 nejvýš
+  /22) podle profilů Shelly (`/shelly`, jméno `<id>.local`), Kamery (RTSP 554,
+  ONVIF 80/8000), NAS (Synology 5000/5001, SMB 445) a Ostatní web (80/443,
+  ve výchozím stavu vypnuto). Nejvýš 64 spojení najednou s timeoutem 500 ms,
+  /24 trvá do půl minuty. Spouští ho jen člověk z panelu, nikdy Homecraft;
+  posílá jen anonymní dotazy do domácí sítě. U už uloženého zařízení jen
+  doplní chybějící jméno v síti. Hesla se nezadávají: URL jen `http`, `https`,
   `rtsp` a `rtsps`, bez `jméno:heslo@`. Seznam je v `/data/network_devices.json`
   (přežije restart) a Homecraft ho zatím nečte. Počet zařízení je i na
   dlaždici na Přehledu.
