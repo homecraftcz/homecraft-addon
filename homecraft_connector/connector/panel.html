@@ -409,10 +409,22 @@ function fmtTime(ts) {
   return ts ? new Date(ts * 1000).toLocaleString("cs-CZ") : "–";
 }
 
+// The saved status has a state and a reason code only; the texts live here.
+const OWN_FIX = " Doplň do něj `fire_event: true` a restartuj Home Assistant, jinak chyby automatizací Homecraftu z logu HA nedorazí.";
 const SYSTEM_LOG_TEXT = {
   active: "Chyby z logu HA se posílají.",
   restart_needed: "Je potřeba restart Home Assistantu, než se změna projeví.",
   own_on: "`fire_event` máš zapnutý ve vlastní konfiguraci.",
+  own_config: "V configuration.yaml máš vlastní `system_log:`." + OWN_FIX,
+  no_packages: "Konfigurace nenačítá složku packages/. Doplň do configuration.yaml `system_log:` s `fire_event: true` a restartuj Home Assistant.",
+  conflict: "Home Assistant ohlásil konflikt s jiným nastavením `system_log` (text z HA níže). Soubor jsme nezapsali; nastav `fire_event: true` tam, kde `system_log` máš.",
+  ha_config_invalid: "Konfigurace Home Assistantu má chybu, která nesouvisí s doplňkem (text z HA níže). Home Assistant by restart odmítl: oprav ji a dej Zkontrolovat znovu.",
+  error: "Nastavení se nepodařilo, soubor jsme nezapsali. Zkus Zkontrolovat znovu nebo přepni souhlas znovu.",
+};
+const SYSTEM_LOG_REASON = {
+  tagged: "`system_log:` je načtený z jiného souboru (`!include`)." + OWN_FIX,
+  probe_failed: " Kontrola: událost z logu HA zatím nedorazila.",
+  restart_not_done: " Restart Home Assistantu se neprovedl.",
 };
 
 // `code` spans as <code>, the rest as text: never innerHTML with text from HA.
@@ -426,11 +438,19 @@ function setCodeText(el, text) {
   });
 }
 
+function systemLogText(sl) {
+  if (sl.state === "own_config" && sl.reason === "tagged") return SYSTEM_LOG_REASON.tagged;
+  let text = SYSTEM_LOG_TEXT[sl.state] || "";
+  if (sl.state === "error" && sl.reason) text += " (" + sl.reason + ")";
+  else if (SYSTEM_LOG_REASON[sl.reason] && sl.reason !== "tagged") text += SYSTEM_LOG_REASON[sl.reason];
+  return text;
+}
+
 function renderSystemLog(sl) {
-  setCodeText($("systemLogState"), SYSTEM_LOG_TEXT[sl.state] || sl.hint || "");
-  $("systemLogMessage").textContent = sl.message || "";
+  setCodeText($("systemLogState"), systemLogText(sl));
+  $("systemLogMessage").textContent = sl.detail || "";
   $("systemLogRestart").hidden = sl.state !== "restart_needed";
-  $("systemLogCheck").hidden = !["restart_needed", "own_on", "error"].includes(sl.state);
+  $("systemLogCheck").hidden = ["off", "active"].includes(sl.state);
 }
 
 async function refreshStatus() {
@@ -728,8 +748,8 @@ $("systemLogRestart").onclick = async () => {
 
 $("systemLogCheck").onclick = async () => {
   try {
-    const r = await call("POST", "api/system-log/check");
-    if ("active" in r) show("systemLogMsg", r.active ? "Událost z logu HA dorazila." : "Událost z logu HA nedorazila.");
+    await call("POST", "api/system-log/check");
+    show("systemLogMsg", "");
   } catch (e) { show("systemLogMsg", e.message, true); }
   refresh();
 };

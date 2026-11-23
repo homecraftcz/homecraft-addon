@@ -145,12 +145,17 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   doplnit), když je `system_log:` načtený přes `!include`, když konfigurace
   nenačítá `packages/` (`packages: !include_dir_named packages`, doplní ho Apply
   Homecraftu), nebo když `check_config` hlásí konflikt s jiným nastavením
-  `system_log` (soubor se hned smaže, panel ukáže text z HA). Změna platí až po
-  restartu Home Assistantu: panel ukáže **Restartovat Home Assistant**, HA se
-  sám nerestartuje nikdy a tlačítko ho restartuje jen po čisté `check_config`.
-  Po restartu (a tlačítkem **Zkontrolovat znovu**) doplněk ověří, že události
-  chodí: zapíše do logu HA jedno varování loggeru `homecraft.connector`
-  a počká na jeho `system_log_event` (Homecraftu se nikdy neposílá). Recorder
+  `system_log` (soubor se hned smaže, panel ukáže text z HA). Jiná chyba
+  v konfiguraci HA soubor nechá a panel ukáže text z HA (HA by restart
+  odmítl). Změna platí až po restartu Home Assistantu: panel ukáže
+  **Restartovat Home Assistant**, HA se sám nerestartuje nikdy a tlačítko ho
+  restartuje jen po čisté `check_config`. Po restartu z panelu, při startu
+  doplňku (pozná i restart HA provedený jinak) a tlačítkem **Zkontrolovat
+  znovu** doplněk ověří, že události chodí: zapíše do logu HA jeden řádek
+  úrovně ERROR loggeru `homecraft.connector` („test of error reports (not an
+  error)“) a počká na jeho `system_log_event` (Homecraftu se nikdy neposílá).
+  **Zkontrolovat znovu** po opravě vlastní konfigurace soubor zapíše, jakmile
+  to konfigurace dovolí. Recorder
   ukládá `system_log_event` do historie jako každou jinou událost, tedy každé
   varování a chybu HA po dobu `purge_keep_days`; doplněk nastavení recorderu
   nemění, kdo to nechce, doplní `recorder: exclude: event_types:

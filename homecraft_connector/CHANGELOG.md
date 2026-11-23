@@ -9,8 +9,9 @@
   zapnutý už v 0.23.0 soubor doplní při startu doplňku.
 - Změna platí po restartu Home Assistantu: v dlaždici **Chybová hlášení** je
   tlačítko **Restartovat Home Assistant** (jen po čisté kontrole konfigurace)
-  a **Zkontrolovat znovu**; doplněk po restartu ověří, že události chodí.
-  HA se sám nerestartuje nikdy.
+  a **Zkontrolovat znovu**; doplněk po restartu (i provedeném jinak, při
+  startu doplňku) ověří, že události chodí. HA se sám nerestartuje nikdy.
+  Chyba v konfiguraci HA, která se `system_log` netýká, soubor nemaže.
 - Vlastní `system_log:` s `fire_event`, `!include` nebo konfigurace bez
   `packages/`: doplněk nic nezapíše a panel ukáže, co doplnit. Konflikt
   nahlášený v kontrole konfigurace HA soubor hned smaže.

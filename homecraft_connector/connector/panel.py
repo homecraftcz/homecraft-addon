@@ -185,9 +185,17 @@ async def _error_reports(request: web.Request) -> web.Response:
 # The restart and the wait for HA after it; one at a time.
 _RESTART_LOCK = asyncio.Lock()
 _restart_tasks: set[asyncio.Task] = set()
-RESTART_DOWN_WAIT = 20.0  # seconds HA may take to go down after the restart call
-RESTART_POLL = 5.0
+RESTART_DOWN_WAIT = 120.0  # seconds HA may take to go down after the restart call
 RESTART_MAX_WAIT = 600.0
+RESTART_POLL = 1.0  # short: the down phase of a restart lasts seconds
+RESTART_ERRORS = {
+    "conflict": "Kontrola konfigurace HA neprošla (konflikt se system_log)",
+    "ha_config_invalid": (
+        "Konfigurace Home Assistantu má chybu, která nesouvisí s doplňkem; "
+        "Home Assistant by restart odmítl"
+    ),
+    "restart_failed": "Restart Home Assistantu selhal",
+}
 
 
 async def _ha_up(http: http_proxy.HttpProxy) -> bool:
@@ -198,28 +206,31 @@ async def _ha_up(http: http_proxy.HttpProxy) -> bool:
     return reply["status"] == 200
 
 
-async def _after_restart(client: Client) -> None:
-    """Waits for HA to go down (or RESTART_DOWN_WAIT) and come back, then probes."""
+async def _wait(http: http_proxy.HttpProxy, up: bool, seconds: float) -> bool:
+    """Until HA's API is up (or down); False after `seconds`."""
     loop = asyncio.get_running_loop()
-    start = loop.time()
+    end = loop.time() + seconds
+    while await _ha_up(http) != up:
+        if loop.time() > end:
+            return False
+        await asyncio.sleep(RESTART_POLL)
+    return True
+
+
+async def _after_restart(client: Client) -> None:
+    """Waits for HA to go down and come back, then rechecks (the consent read
+    again under system_log.lock). HA never down: the restart did not happen."""
     try:
         async with aiohttp.ClientSession() as session:
             http = http_proxy.HttpProxy(session)
-            while loop.time() - start < RESTART_DOWN_WAIT and await _ha_up(http):
-                await asyncio.sleep(1)
-            while not await _ha_up(http):
-                if loop.time() - start > RESTART_MAX_WAIT:
-                    logger.warning("Home Assistant po restartu neodpovídá")
-                    return
-                await asyncio.sleep(RESTART_POLL)
-            if not client.error_reports:  # the restart dropped our file: nothing to probe
-                state.save_system_log(system_log.status("off"))
-            elif await system_log.probe(session):
-                state.save_system_log(system_log.status("active"))
-            else:
-                saved = state.load_system_log()
-                saved["message"] = "Po restartu událost nedorazila"
-                state.save_system_log(saved)
+            if not await _wait(http, False, RESTART_DOWN_WAIT):
+                logger.warning("Home Assistant se po restartu nevypnul")
+                await system_log.note("restart_not_done")
+                return
+            if not await _wait(http, True, RESTART_MAX_WAIT):
+                logger.warning("Home Assistant po restartu neodpovídá")
+                return
+            await system_log.recheck(session, lambda: client.error_reports)
     except Exception:
         logger.exception("Kontrola po restartu HA selhala")
     finally:
@@ -243,8 +254,9 @@ async def _system_log_restart(request: web.Request) -> web.Response:
         raise
     if problem:
         _RESTART_LOCK.release()
+        reason, detail = problem
         return web.json_response(
-            {"ok": False, "error": f"Kontrola konfigurace HA neprošla: {problem}"}, status=409
+            {"ok": False, "error": f"{RESTART_ERRORS[reason]}: {detail}"}, status=409
         )
     logger.info("Restart Home Assistantu z panelu")
     task = asyncio.create_task(_after_restart(request.app[CLIENT]))
@@ -254,19 +266,12 @@ async def _system_log_restart(request: web.Request) -> web.Response:
 
 
 async def _system_log_check(request: web.Request) -> web.Response:
-    """The probe on demand (HA restarted another way); after a failed switch
-    (`error`) the switch again."""
+    """**Zkontrolovat znovu**: system_log.recheck (HA restarted another way, the
+    customer fixed the config, a failed switch)."""
     client = request.app[CLIENT]
-    if client.error_reports and state.load_system_log()["state"] == "error":
-        status = await system_log.switch(True)
-        return web.json_response({"ok": True, "system_log": status})
     async with aiohttp.ClientSession() as session:
-        active = await system_log.probe(session)
-    if active and client.error_reports:
-        state.save_system_log(system_log.status("active"))
-    elif not active and not client.error_reports:  # HA restarted without our file
-        state.save_system_log(system_log.status("off"))
-    return web.json_response({"ok": True, "active": active, "system_log": state.load_system_log()})
+        status = await system_log.recheck(session, lambda: client.error_reports)
+    return web.json_response({"ok": True, "system_log": status})
 
 
 async def _reconnect(request: web.Request) -> web.Response:

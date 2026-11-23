@@ -6,17 +6,18 @@ consent on, the add-on writes its own package `packages/homecraft_system_log.yam
 off; HA restarts only from the panel. Where the customer configures
 `fire_event` themselves (configuration.yaml, `!include`, another package), the
 add-on writes nothing and the panel says what to add. HA tells nothing about
-the `system_log` it runs with: `probe` writes one warning and waits for its event.
+the `system_log` it runs with: `probe` writes one error line and waits for its event.
 
-The status `{"state", "hint", "message"}` is kept in /data/state.json:
-`off`, `restart_needed`, `active`, `own_on`, `own_config`, `no_packages`,
-`conflict`, `error`."""
+The status `{"state", "reason", "detail"}` is kept in /data/state.json; the
+panel turns state and reason into text, `detail` is HA's own message. States:
+`off`, `restart_needed` (reason `probe_failed`, `restart_not_done`), `active`,
+`own_on`, `own_config` (reason `own_off`, `tagged`), `no_packages`, `conflict`,
+`ha_config_invalid`, `error` (reason: the error code)."""
 
 import asyncio
-import base64
 import json
 import logging
-import os
+from collections.abc import Callable
 
 import aiohttp
 import yaml
@@ -31,33 +32,17 @@ CONTENT = (
     f"{MARK}\n# Managed by the add-on: switch the consent off in its panel to remove it.\n"
     "system_log:\n  fire_event: true\n"
 )
-PROBE_LOGGER = "homecraft.connector"  # not errors.LOGGER_RE: never forwarded
+# Not errors.LOGGER_RE: the Forwarder never sends it. Level error: a
+# `logger: default: error` would drop a warning before system_log sees it.
+PROBE_LOGGER = "homecraft.connector"
 PROBE_TIMEOUT = 5.0
 
-HINT_OWN = (
-    "V configuration.yaml máš vlastní `system_log:`. Doplň do něj `fire_event: true` "
-    "a restartuj Home Assistant, jinak chyby automatizací Homecraftu z logu HA nedorazí."
-)
-HINT_TAGGED = (
-    "`system_log:` je načtený z jiného souboru (`!include`). Doplň do něj `fire_event: true` "
-    "a restartuj Home Assistant, jinak chyby automatizací Homecraftu z logu HA nedorazí."
-)
-HINT_NO_PACKAGES = (
-    "Konfigurace nenačítá složku packages/. Doplň do configuration.yaml `system_log:` "
-    "s `fire_event: true` a restartuj Home Assistant."
-)
-HINT_CONFLICT = (
-    "Home Assistant ohlásil konflikt s jiným nastavením `system_log` (text z HA níže). "
-    "Soubor jsme nezapsali; nastav `fire_event: true` tam, kde `system_log` máš."
-)
-HINT_ERROR = (
-    "Nastavení se nepodařilo, soubor jsme nezapsali. Zkus Zkontrolovat znovu "
-    "nebo přepni souhlas znovu."
-)
+# enable/disable/probe and their saved status: one at a time.
+lock = asyncio.Lock()
 
 
-def status(state: str, hint: str | None = None, message: str | None = None) -> dict:
-    return {"state": state, "hint": hint, "message": message}
+def status(state: str, reason: str | None = None, detail: str | None = None) -> dict:
+    return {"state": state, "reason": reason, "detail": detail}
 
 
 def own_config(text: str) -> str | None:
@@ -86,10 +71,6 @@ def packages_included(text: str) -> bool:
     return bool(core_config.PACKAGES_RE.search(text))
 
 
-def _path():
-    return settings.CONFIG_ROOT / FILE
-
-
 def ours(path) -> bool:
     """Our file: never a symlink, the first line is MARK."""
     if path.is_symlink() or not path.is_file():
@@ -98,119 +79,134 @@ def ours(path) -> bool:
         return f.readline().rstrip("\r\n") == MARK
 
 
-def _write() -> None:
-    """Atomic, 0644, like core_config._write."""
-    path = _path()
-    path.parent.mkdir(exist_ok=True)
-    tmp = path.with_name(path.name + files.TMP_SUFFIX)
-    tmp.unlink(missing_ok=True)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
-    os.fchmod(fd, 0o644)  # past the umask
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(CONTENT)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
 def _remove() -> bool:
     """Removes the file only when it is ours."""
-    path = _path()
-    if not ours(path):
+    if not ours(settings.CONFIG_ROOT / FILE):
         return False
-    path.unlink()
+    files.delete(FILE)
     return True
 
 
-async def check(http) -> str | None:
-    """None when HA's check_config is clean, else what it reported: like
-    core_config._check, but a duplicate `system_log` key in a package HA
-    reports only in `warnings` (`result` stays valid)."""
-    reply = await http.core("POST", "/api/config/core/check_config")
-    try:
-        result = json.loads(base64.b64decode(reply["body_b64"]) or b"null")
-    except ValueError:
-        result = None
-    if not isinstance(result, dict):
-        return f"HTTP {reply['status']}"
-    warnings = result.get("warnings")
-    if warnings and "system_log" in str(warnings):
-        return str(warnings)[:500]
-    if reply["status"] == 200 and result.get("result") == "valid":
+async def check(http) -> tuple[str, str] | None:
+    """None when HA's check_config is clean, else (`conflict` | `ha_config_invalid`,
+    HA's message): only a problem naming system_log/fire_event is ours."""
+    problem = await core_config._check(http, warnings_about="system_log")
+    if problem is None:
         return None
-    if result.get("errors"):
-        return str(result["errors"])[:500]
-    return f"HTTP {reply['status']}"
-
-
-_lock = asyncio.Lock()
+    ours_ = "system_log" in problem or "fire_event" in problem
+    return ("conflict" if ours_ else "ha_config_invalid", problem)
 
 
 async def enable(http, previous: dict | None = None) -> dict:
-    """Writes the package when the customer's config leaves room for it;
-    `http.core(method, path)` calls HA's REST API. `previous`: the saved status,
-    kept when the file is already there."""
-    async with _lock:
-        text = await asyncio.to_thread(core_config._read)
-        own = own_config(text)
-        if own == "on":
-            return status("own_on")
-        if own == "off":
-            return status("own_config", HINT_OWN)
-        if own == "tagged":
-            return status("own_config", HINT_TAGGED)
-        if not packages_included(text):
-            return status("no_packages", HINT_NO_PACKAGES)
-        path = _path()
-        existed = ours(path)
-        if not existed and (path.exists() or path.is_symlink()):
-            return status("conflict", HINT_CONFLICT, f"{FILE} už existuje a není náš")
-        await asyncio.to_thread(_write)
-        try:
-            problem = await check(http)
-        except policy.OpError as e:
+    """Writes the package when the customer's config leaves room for it
+    (callers hold `lock`); `http.core(method, path)` calls HA's REST API.
+    `previous`: the saved status, kept when the file is already there."""
+    text = await asyncio.to_thread(core_config._read)
+    own = own_config(text)
+    if own == "on":
+        return status("own_on")
+    if own is not None:
+        return status("own_config", "own_off" if own == "off" else "tagged")
+    if not packages_included(text):
+        return status("no_packages")
+    path = settings.CONFIG_ROOT / FILE
+    existed = ours(path)
+    if not existed:
+        if path.exists() or path.is_symlink():
+            return status("conflict", detail=f"{FILE} exists and is not the add-on's")
+        await asyncio.to_thread(files.write, FILE, CONTENT)
+    try:
+        problem = await check(http)
+    except BaseException as e:
+        # Unchecked: a new file goes, one HA may already run with stays.
+        if not existed:
             await asyncio.to_thread(_remove)
+        if isinstance(e, policy.OpError):
             logger.warning("Kontrola konfigurace HA selhala: %s %s", e.code, e.message)
-            return status("error", HINT_ERROR, f"Home Assistant neodpověděl ({e.code})")
-        except BaseException:
-            await asyncio.to_thread(_remove)
-            raise
-        if problem:
-            await asyncio.to_thread(_remove)
-            return status("conflict", HINT_CONFLICT, problem)
-        if existed and previous and previous.get("state") == "active":
-            return previous
-        return status("restart_needed")
+            return status("error", e.code)
+        raise
+    if problem and problem[0] == "conflict":
+        await asyncio.to_thread(_remove)
+        return status("conflict", detail=problem[1])
+    if problem:  # HA's own config is broken, not by our file: it stays
+        return status("ha_config_invalid", detail=problem[1])
+    if existed and previous and previous.get("state") in ("active", "restart_needed"):
+        return previous
+    return status("restart_needed")
 
 
 async def disable() -> dict:
     """Removes our file; HA keeps firing the events until it restarts, the
     add-on just stops subscribing."""
-    async with _lock:
-        removed = await asyncio.to_thread(_remove)
+    removed = await asyncio.to_thread(_remove)
     return status("restart_needed" if removed else "off")
 
 
 async def switch(enabled: bool) -> dict:
     """enable/disable for the consent switch, saved; a failure is the status
     `error`, never an exception (the consent and homecraft_error work without it)."""
+    async with lock:
+        try:
+            if enabled:
+                async with aiohttp.ClientSession() as session:
+                    result = await enable(http_proxy.HttpProxy(session), state.load_system_log())
+            else:
+                result = await disable()
+        except Exception as e:
+            logger.exception("Nastavení system_log selhalo")
+            result = status("error", getattr(e, "code", type(e).__name__))
+        state.save_system_log(result)
+        return result
+
+
+async def recheck(session: aiohttp.ClientSession, consent_on: Callable[[], bool]) -> dict:
+    """After a restart, on add-on start and from **Zkontrolovat znovu**: a waiting
+    state (`restart_needed`, `own_on`) is probed, any other is enabled again (the
+    customer may have fixed the config), with the consent off only a pending
+    restart is probed. Saved; the consent is read under the lock."""
+    async with lock:
+        saved = state.load_system_log()
+        if not consent_on():
+            if saved["state"] == "restart_needed" and not await probe(session):
+                saved = status("off")
+        elif saved["state"] in ("restart_needed", "own_on"):
+            saved = (
+                status("active")
+                if await probe(session)
+                else {**saved, "reason": "probe_failed", "detail": None}
+            )
+        elif saved["state"] != "active":
+            try:
+                saved = await enable(http_proxy.HttpProxy(session), saved)
+            except Exception as e:
+                logger.exception("Nastavení system_log selhalo")
+                saved = status("error", getattr(e, "code", type(e).__name__))
+            if saved["state"] == "own_on" and await probe(session):
+                saved = status("active")
+        state.save_system_log(saved)
+        return saved
+
+
+async def note(reason: str) -> None:
+    """Keeps the state, records why it is still waiting."""
+    async with lock:
+        state.save_system_log({**state.load_system_log(), "reason": reason})
+
+
+async def startup(consent_on: Callable[[], bool]) -> None:
+    """Once on add-on start, next to the connection: the consent on since 0.23.0
+    adds the file, a restart done elsewhere is recognised (one probe line)."""
+    if not consent_on() or state.load_system_log()["state"] == "active":
+        return
     try:
-        if enabled:
-            async with aiohttp.ClientSession() as session:
-                result = await enable(http_proxy.HttpProxy(session), state.load_system_log())
-        else:
-            result = await disable()
-    except Exception as e:
-        logger.exception("Nastavení system_log selhalo")
-        result = status("error", HINT_ERROR, getattr(e, "code", type(e).__name__))
-    state.save_system_log(result)
-    return result
+        async with aiohttp.ClientSession() as session:
+            await recheck(session, consent_on)
+    except Exception:
+        logger.exception("system_log se nepodařilo nastavit")
 
 
 async def probe(session: aiohttp.ClientSession) -> bool:
-    """Does HA fire `system_log_event` now? Writes one warning to HA's log."""
+    """Does HA fire `system_log_event` now? Writes one error line to HA's log."""
     try:
         ws = await ws_proxy.connect(session)
     except policy.OpError:
@@ -224,8 +220,8 @@ async def probe(session: aiohttp.ClientSession) -> bool:
                 "domain": "system_log",
                 "service": "write",
                 "service_data": {
-                    "message": "Homecraft Connector: test of error reports",
-                    "level": "warning",
+                    "message": "Homecraft Connector: test of error reports (not an error)",
+                    "level": "error",
                     "logger": PROBE_LOGGER,
                 },
             }
@@ -248,8 +244,9 @@ async def probe(session: aiohttp.ClientSession) -> bool:
     return False
 
 
-async def restart(http) -> str | None:
-    """Restarts HA only after a clean check_config; the problem otherwise."""
+async def restart(http) -> tuple[str, str] | None:
+    """Restarts HA only after a clean check_config; else (`conflict` |
+    `ha_config_invalid` | `restart_failed`, detail)."""
     if problem := await check(http):
         return problem
     try:
@@ -258,4 +255,4 @@ async def restart(http) -> str | None:
         if e.code == "ha_unreachable":
             return None  # HA dropped the connection: the restart is running
         raise
-    return None if reply["status"] < 400 else f"HTTP {reply['status']}"
+    return None if reply["status"] < 400 else ("restart_failed", f"HTTP {reply['status']}")

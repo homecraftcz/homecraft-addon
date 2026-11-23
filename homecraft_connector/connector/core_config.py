@@ -91,13 +91,18 @@ def _write(text: str) -> None:
         raise
 
 
-async def _check(http) -> str | None:
-    """None when HA's check_config says valid, else what it reported."""
+async def _check(http, warnings_about: str | None = None) -> str | None:
+    """None when HA's check_config says valid, else what it reported. HA
+    reports a failed package (a duplicate key) only in `warnings` with
+    `result` valid: `warnings_about` makes a warning naming it a problem too."""
     reply = await http.core("POST", "/api/config/core/check_config")
     try:
         result = json.loads(base64.b64decode(reply["body_b64"]) or b"null")
     except ValueError:
         result = None
+    warnings = result.get("warnings") if isinstance(result, dict) else None
+    if warnings_about and warnings and warnings_about in str(warnings):
+        return str(warnings)[:500]
     if reply["status"] == 200 and isinstance(result, dict) and result.get("result") == "valid":
         return None
     if isinstance(result, dict) and result.get("errors"):

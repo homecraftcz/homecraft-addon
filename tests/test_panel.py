@@ -203,7 +203,7 @@ def test_error_reports_switch(run_panel, agent, monkeypatch):
     assert body == {
         "ok": True,
         "error_reports": True,
-        "system_log": {"state": "restart_needed", "hint": None, "message": None},
+        "system_log": {"state": "restart_needed", "reason": None, "detail": None},
     }
     assert after_on["state"] == "restart_needed" and calls == ["enable", "disable"]
     assert off["error_reports"] is False and off["system_log"]["state"] == "error"
@@ -215,7 +215,7 @@ def test_system_log_routes_need_the_nonce(run_panel, monkeypatch):
         raise AssertionError("called without the nonce")
 
     monkeypatch.setattr(system_log, "restart", never)
-    monkeypatch.setattr(system_log, "probe", never)
+    monkeypatch.setattr(system_log, "recheck", never)
 
     async def scenario(http):
         return [
@@ -228,7 +228,7 @@ def test_system_log_routes_need_the_nonce(run_panel, monkeypatch):
 
 def test_system_log_restart_refused_by_check_config(run_panel, monkeypatch):
     async def restart(http):
-        return "duplicate key 'fire_event'"
+        return ("ha_config_invalid", "Invalid config for 'light'")
 
     monkeypatch.setattr(system_log, "restart", restart)
 
@@ -237,5 +237,7 @@ def test_system_log_restart_refused_by_check_config(run_panel, monkeypatch):
         return r.status, await r.json()
 
     code, body = run_panel(scenario)
-    assert code == 409 and body["error"].endswith("duplicate key 'fire_event'")
+    assert code == 409 and body["error"] == (
+        f"{panel.RESTART_ERRORS['ha_config_invalid']}: Invalid config for 'light'"
+    )
     assert not panel._RESTART_LOCK.locked()
