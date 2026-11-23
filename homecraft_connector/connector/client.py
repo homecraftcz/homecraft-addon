@@ -584,6 +584,8 @@ def _audit_target(req: dict) -> str:
     if op == "network_devices.get":
         feature = req.get("feature")
         return f"Síť (feature {feature})" if feature else "Síť"
+    if op == "network_devices.import":
+        return "Síť (import z Homecraftu)"
     return ""
 
 
@@ -612,6 +614,8 @@ async def _dispatch(op: object, req: dict, conn: _Conn) -> object:
         # links to this panel with it.
         slug = socket.gethostname().replace("-", "_")
         return {"devices": network_devices.load(), "slug": slug}
+    if op == "network_devices.import":  # one-time move from Homecraft's DB (#635)
+        return network_devices.import_devices(req["devices"])
     raise policy.OpError("unknown_op", str(op)[:64])
 
 

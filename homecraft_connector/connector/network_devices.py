@@ -145,3 +145,42 @@ def save(devices: object) -> list[dict]:
     stored = validate(devices)
     write_private(_path(), json.dumps(stored, ensure_ascii=False).encode())
     return stored
+
+
+def import_devices(devices: object) -> dict:
+    """Merge Homecraft's old project list into the stored one (#635), by address or MAC.
+
+    Stored entries win; only their empty fields are filled. New ones get source
+    "manual". Invalid entries are dropped. Idempotent. Returns the counts."""
+    if not isinstance(devices, list):
+        raise TypeError("devices")
+    stored = load()
+    counts = {"added": 0, "updated": 0, "unchanged": 0, "invalid": 0, "over_limit": 0}
+    for raw in devices:
+        try:
+            new = _device({**raw, "source": "manual"} if isinstance(raw, dict) else raw)
+        except ValueError:
+            counts["invalid"] += 1
+            continue
+        match = next(
+            (
+                d
+                for d in stored
+                if d["address"].lower() == new["address"].lower()
+                or (new["mac"] and d["mac"] == new["mac"])
+            ),
+            None,
+        )
+        if match is None:
+            if len(stored) >= MAX_DEVICES:
+                counts["over_limit"] += 1
+                continue
+            stored.append(new)
+            counts["added"] += 1
+            continue
+        missing = {k: v for k, v in new.items() if v and not match.get(k)}
+        match.update(missing)
+        counts["updated" if missing else "unchanged"] += 1
+    if counts["added"] or counts["updated"]:
+        save(stored)
+    return counts

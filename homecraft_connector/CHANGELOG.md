@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.0
+
+- Jednorázový přesun síťových zařízení z Homecraftu: nová operace
+  `network_devices.import` sloučí seznam z Homecraftu do záložky **Síť**.
+  Shoda podle IP adresy nebo MAC: uložené zařízení vyhrává, doplní se jen
+  jeho prázdná pole. Nová zařízení mají zdroj **manual**, neplatná se
+  zahodí. Opakovaný import nic nezmění. V auditu **Síť (import z Homecraftu)**.
+
 ## 0.20.0
 
 - Homecraft čte seznam síťových zařízení ze záložky **Síť** novou operací

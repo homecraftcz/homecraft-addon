@@ -135,6 +135,44 @@ def test_network_devices_get_op(tmp_path, monkeypatch):
     assert client._audit_target({"op": "network_devices.get"}) == "Síť"
 
 
+def test_network_devices_import_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+    network_devices.save(
+        [
+            {"name": "Brána", "kind": "shelly_gateway", "address": "10.0.0.10", "source": "scan"},
+            {"name": "NAS", "kind": "nas", "address": "10.0.0.5", "mac": "aa:bb:cc:dd:ee:ff"},
+        ]
+    )
+    devices = [
+        # same IP: stored name wins, the empty note is filled
+        {"name": "Jiné jméno", "kind": "other", "address": "10.0.0.10", "note": "půda"},
+        # same MAC under another address: nothing missing to fill
+        {"name": "NAS 2", "kind": "nas", "address": "10.0.0.6", "mac": "AA-BB-CC-DD-EE-FF"},
+        {"name": "Kamera", "kind": "camera", "address": "10.0.0.20", "source": "ha"},
+        {"name": "", "address": "10.0.0.30"},  # invalid: no name
+        "x",
+    ]
+    req = {"op": "network_devices.import", "devices": devices}
+    got = run_against_homecraft(
+        [{"id": 1, **req}, {"id": 2, **req}, {"id": 3, "op": "network_devices.import"}],
+        expect=3,
+    )
+    by_id = {g["id"]: g for g in got}
+    counts = {"added": 1, "updated": 1, "unchanged": 1, "invalid": 2, "over_limit": 0}
+    assert by_id[1]["result"] == counts
+    # idempotent: a second import changes nothing
+    assert by_id[2]["result"] == {**counts, "added": 0, "updated": 0, "unchanged": 3}
+    assert by_id[3]["error"]["code"] == "bad_request"
+    stored = network_devices.load()
+    assert [(d["address"], d["name"], d["source"]) for d in stored] == [
+        ("10.0.0.10", "Brána", "scan"),
+        ("10.0.0.5", "NAS", "manual"),
+        ("10.0.0.20", "Kamera", "manual"),
+    ]
+    assert stored[0]["note"] == "půda"
+    assert client._audit_target(req) == "Síť (import z Homecraftu)"
+
+
 def test_card_write_passes_the_signature(tmp_path, monkeypatch, card_key):
     monkeypatch.setattr(settings, "CONFIG_ROOT", tmp_path)
     path, text = "www/homecraft/heating-card.js", "x"
