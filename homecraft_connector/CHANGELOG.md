@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0
+
+- Panel má záložku **Síť**: seznam síťových zařízení domácnosti (název, typ,
+  adresa, jméno v síti `*.local`, MAC, webové rozhraní, poznámka, zdroj) s
+  filtry podle typu, přidáním, úpravou a smazáním. Seznam zůstává v doplňku
+  (`/data/network_devices.json`, přežije restart), API panelu
+  `GET/PUT /api/network-devices`. Validace stejná jako v Homecraftu (délky,
+  URL jen http/https/rtsp/rtsps) a navíc odmítne URL s přihlašovacími údaji
+  (`jméno:heslo@`). Sloupec **Používá** zatím prázdný (vyplní záložka Features).
+- Dlaždice **Síťová zařízení** na Přehledu: počet podle typu a počet nových ze
+  skenu (zatím 0, sken přijde později).
+
 ## 0.16.0
 
 - Homecraft smí obsluhovat doplněk Tailscale (feature Tailscale, vzdálený

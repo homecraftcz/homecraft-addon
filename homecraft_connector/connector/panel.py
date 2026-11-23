@@ -1,5 +1,5 @@
 """The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause and the audit.
+pause, the audit and the network devices (#631).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from . import access_token, audit, ha_token, settings, state
+from . import access_token, audit, ha_token, network_devices, settings, state
 from .client import Client
 
 logger = logging.getLogger(__name__)
@@ -185,8 +185,26 @@ async def _run_update(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def _network_devices(request: web.Request) -> web.Response:
+    return web.json_response(network_devices.load())
+
+
+async def _save_network_devices(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest(text="expected JSON") from None
+    try:
+        stored = network_devices.save(body)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    logger.info("Síťová zařízení uložena v panelu (%d)", len(stored))
+    return web.json_response(stored)
+
+
 def make_app(client: Client, pairing_code: str, verification_code: str) -> web.Application:
-    app = web.Application(middlewares=[_guard], client_max_size=16 * 1024)
+    # The network device list is the largest body (200 devices with URLs and notes).
+    app = web.Application(middlewares=[_guard], client_max_size=1024 * 1024)
     app.on_response_prepare.append(_security_headers)
     app[CLIENT] = client
     app[PAIRING_CODE] = pairing_code
@@ -202,6 +220,8 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_post("/api/reconnect", _reconnect)
     app.router.add_get("/api/updates", _updates)
     app.router.add_post("/api/updates/run", _run_update)
+    app.router.add_get("/api/network-devices", _network_devices)
+    app.router.add_put("/api/network-devices", _save_network_devices)
     return app
 
 
