@@ -1,5 +1,6 @@
 """The panel's switches that survive a restart: /data/state.json (#556) holds
-`paused` and `error_reports` (#31); saving one keeps the other."""
+`paused`, `error_reports` (#31) and the `system_log` status
+(homecraftcz/homecraft#906); saving one keeps the others."""
 
 import json
 
@@ -38,3 +39,13 @@ def load_error_reports() -> bool:
 
 def save_error_reports(enabled: bool) -> None:
     _save(error_reports=bool(enabled))
+
+
+def load_system_log() -> dict:
+    """The last system_log.enable/disable/probe status; `off` before any."""
+    data = _load().get("system_log")
+    return data if isinstance(data, dict) and "state" in data else {"state": "off"}
+
+
+def save_system_log(status: dict) -> None:
+    _save(system_log=status)

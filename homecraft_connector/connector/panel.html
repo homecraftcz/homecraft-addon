@@ -163,8 +163,19 @@ a.feat-link:hover { border-color: var(--accent); }
       <p class="muted">Posílají se jen chyby automatizací a skriptů Homecraftu a chyby z Node-RED
         (<code>homecraft_error</code>), jen povolená pole: feature, verze, kód, uzel, entita,
         oblast, okruh, zpráva a stopa rozhodnutí. Stejná chyba nejvýš jednou za 10 minut.
-        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.</p>
+        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.
+        Chyby z logu HA zapne doplněk souborem <code>packages/homecraft_system_log.yaml</code>
+        (<code>system_log: fire_event: true</code>). Recorder ukládá každé varování a chybu HA
+        jako událost <code>system_log_event</code> do historie; kdo to nechce, doplní
+        <code>recorder: exclude: event_types: [system_log_event]</code>.</p>
       <div id="errorReportsMsg" class="msg"></div>
+      <div id="systemLogState" class="msg"></div>
+      <div id="systemLogMessage" class="msg mono"></div>
+      <div class="row">
+        <button type="button" id="systemLogRestart" hidden>Restartovat Home Assistant</button>
+        <button type="button" id="systemLogCheck" hidden>Zkontrolovat znovu</button>
+      </div>
+      <div id="systemLogMsg" class="msg"></div>
     </section>
   </div>
 
@@ -398,6 +409,30 @@ function fmtTime(ts) {
   return ts ? new Date(ts * 1000).toLocaleString("cs-CZ") : "–";
 }
 
+const SYSTEM_LOG_TEXT = {
+  active: "Chyby z logu HA se posílají.",
+  restart_needed: "Je potřeba restart Home Assistantu, než se změna projeví.",
+  own_on: "`fire_event` máš zapnutý ve vlastní konfiguraci.",
+};
+
+// `code` spans as <code>, the rest as text: never innerHTML with text from HA.
+function setCodeText(el, text) {
+  el.replaceChildren();
+  (text || "").split("`").forEach((part, i) => {
+    if (!part) return;
+    const node = i % 2 ? document.createElement("code") : document.createTextNode(part);
+    if (i % 2) node.textContent = part;
+    el.append(node);
+  });
+}
+
+function renderSystemLog(sl) {
+  setCodeText($("systemLogState"), SYSTEM_LOG_TEXT[sl.state] || sl.hint || "");
+  $("systemLogMessage").textContent = sl.message || "";
+  $("systemLogRestart").hidden = sl.state !== "restart_needed";
+  $("systemLogCheck").hidden = !["restart_needed", "own_on", "error"].includes(sl.state);
+}
+
 async function refreshStatus() {
   const s = await call("GET", "api/status");
   $("version").textContent = s.version;
@@ -412,6 +447,7 @@ async function refreshStatus() {
   $("pendingBadge").hidden = !s.pending_approval;
   if (document.activeElement !== $("paused")) $("paused").checked = s.paused;
   if (document.activeElement !== $("errorReports")) $("errorReports").checked = s.error_reports;
+  renderSystemLog(s.system_log || { state: "off" });
   $("tokenSet").hidden = !s.token_set || editingToken;
   $("tokenForm").hidden = s.token_set && !editingToken;
   $("tokenCancel").hidden = !s.token_set;
@@ -666,6 +702,35 @@ $("errorReports").onchange = async (ev) => {
     ev.target.checked = !ev.target.checked;
     show("errorReportsMsg", e.message, true);
   }
+  refresh();
+};
+
+// Two steps instead of confirm(): the Companion app's webview may suppress dialogs.
+let restartArmed = null;
+function disarmRestart() {
+  clearTimeout(restartArmed);
+  restartArmed = null;
+  $("systemLogRestart").textContent = "Restartovat Home Assistant";
+}
+$("systemLogRestart").onclick = async () => {
+  if (!restartArmed) {
+    $("systemLogRestart").textContent = "Home Assistant se restartuje, na minutu bude nedostupný. Pokračovat?";
+    restartArmed = setTimeout(disarmRestart, 5000);
+    return;
+  }
+  disarmRestart();
+  try {
+    await call("POST", "api/system-log/restart");
+    show("systemLogMsg", "Home Assistant se restartuje, po startu ověříme chyby z logu…");
+  } catch (e) { show("systemLogMsg", e.message, true); }
+  refresh();
+};
+
+$("systemLogCheck").onclick = async () => {
+  try {
+    const r = await call("POST", "api/system-log/check");
+    if ("active" in r) show("systemLogMsg", r.active ? "Událost z logu HA dorazila." : "Událost z logu HA nedorazila.");
+  } catch (e) { show("systemLogMsg", e.message, true); }
   refresh();
 };
 

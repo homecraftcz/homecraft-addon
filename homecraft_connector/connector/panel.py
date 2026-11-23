@@ -1,6 +1,7 @@
 """The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause, consent to error reports (#31), the audit, the network devices (#631) with
-their LAN scan (#633) and the features Homecraft installed (homecraftcz/homecraft#636).
+pause, consent to error reports (#31) with HA's system_log (homecraftcz/homecraft#906),
+the audit, the network devices (#631) with their LAN scan (#633) and the features
+Homecraft installed (homecraftcz/homecraft#636).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -27,12 +28,14 @@ from . import (
     audit,
     features,
     ha_token,
+    http_proxy,
     network_devices,
     network_discovery,
     network_scan,
     policy,
     settings,
     state,
+    system_log,
 )
 from .client import Client
 
@@ -104,6 +107,7 @@ async def _status(request: web.Request) -> web.Response:
             "ha_token_set": ha_token.load() is not None,
             "paused": client.paused,
             "error_reports": client.error_reports,
+            "system_log": state.load_system_log(),
             "audit_24h": audit.summary(time.time() - 86400),
         }
     )
@@ -174,7 +178,95 @@ async def _error_reports(request: web.Request) -> web.Response:
     state.save_error_reports(enabled)
     request.app[CLIENT].error_reports = enabled
     logger.info("Chybová hlášení Homecraftu %s v panelu", "zapnuta" if enabled else "vypnuta")
-    return web.json_response({"ok": True, "error_reports": enabled})
+    status = await system_log.switch(enabled)
+    return web.json_response({"ok": True, "error_reports": enabled, "system_log": status})
+
+
+# The restart and the wait for HA after it; one at a time.
+_RESTART_LOCK = asyncio.Lock()
+_restart_tasks: set[asyncio.Task] = set()
+RESTART_DOWN_WAIT = 20.0  # seconds HA may take to go down after the restart call
+RESTART_POLL = 5.0
+RESTART_MAX_WAIT = 600.0
+
+
+async def _ha_up(http: http_proxy.HttpProxy) -> bool:
+    try:
+        reply = await asyncio.wait_for(http.core("GET", "/api/"), 10)
+    except (policy.OpError, TimeoutError):
+        return False
+    return reply["status"] == 200
+
+
+async def _after_restart(client: Client) -> None:
+    """Waits for HA to go down (or RESTART_DOWN_WAIT) and come back, then probes."""
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    try:
+        async with aiohttp.ClientSession() as session:
+            http = http_proxy.HttpProxy(session)
+            while loop.time() - start < RESTART_DOWN_WAIT and await _ha_up(http):
+                await asyncio.sleep(1)
+            while not await _ha_up(http):
+                if loop.time() - start > RESTART_MAX_WAIT:
+                    logger.warning("Home Assistant po restartu neodpovídá")
+                    return
+                await asyncio.sleep(RESTART_POLL)
+            if not client.error_reports:  # the restart dropped our file: nothing to probe
+                state.save_system_log(system_log.status("off"))
+            elif await system_log.probe(session):
+                state.save_system_log(system_log.status("active"))
+            else:
+                saved = state.load_system_log()
+                saved["message"] = "Po restartu událost nedorazila"
+                state.save_system_log(saved)
+    except Exception:
+        logger.exception("Kontrola po restartu HA selhala")
+    finally:
+        _RESTART_LOCK.release()
+
+
+async def _system_log_restart(request: web.Request) -> web.Response:
+    """Restarts HA (only after a clean check_config) and probes once it is back."""
+    if _RESTART_LOCK.locked():
+        return web.json_response({"ok": False, "error": "Restart už běží"}, status=409)
+    await _RESTART_LOCK.acquire()
+    try:
+        async with aiohttp.ClientSession() as session:
+            problem = await system_log.restart(http_proxy.HttpProxy(session))
+    except BaseException as e:
+        _RESTART_LOCK.release()
+        if isinstance(e, policy.OpError):
+            return web.json_response(
+                {"ok": False, "error": f"Home Assistant neodpověděl ({e.code})"}, status=502
+            )
+        raise
+    if problem:
+        _RESTART_LOCK.release()
+        return web.json_response(
+            {"ok": False, "error": f"Kontrola konfigurace HA neprošla: {problem}"}, status=409
+        )
+    logger.info("Restart Home Assistantu z panelu")
+    task = asyncio.create_task(_after_restart(request.app[CLIENT]))
+    _restart_tasks.add(task)
+    task.add_done_callback(_restart_tasks.discard)
+    return web.json_response({"ok": True})
+
+
+async def _system_log_check(request: web.Request) -> web.Response:
+    """The probe on demand (HA restarted another way); after a failed switch
+    (`error`) the switch again."""
+    client = request.app[CLIENT]
+    if client.error_reports and state.load_system_log()["state"] == "error":
+        status = await system_log.switch(True)
+        return web.json_response({"ok": True, "system_log": status})
+    async with aiohttp.ClientSession() as session:
+        active = await system_log.probe(session)
+    if active and client.error_reports:
+        state.save_system_log(system_log.status("active"))
+    elif not active and not client.error_reports:  # HA restarted without our file
+        state.save_system_log(system_log.status("off"))
+    return web.json_response({"ok": True, "active": active, "system_log": state.load_system_log()})
 
 
 async def _reconnect(request: web.Request) -> web.Response:
@@ -292,6 +384,8 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_delete("/api/ha-token", _clear_ha_token)
     app.router.add_post("/api/pause", _pause)
     app.router.add_post("/api/error-reports", _error_reports)
+    app.router.add_post("/api/system-log/restart", _system_log_restart)
+    app.router.add_post("/api/system-log/check", _system_log_check)
     app.router.add_post("/api/reconnect", _reconnect)
     app.router.add_get("/api/updates", _updates)
     app.router.add_post("/api/updates/run", _run_update)

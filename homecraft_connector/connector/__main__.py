@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 
-from . import audit, errors, fingerprint, identity, panel, selfcheck, settings, state
+from . import audit, errors, fingerprint, identity, panel, selfcheck, settings, state, system_log
 from .client import Client
 
 logger = logging.getLogger("connector")
@@ -42,6 +42,16 @@ async def main() -> None:
         await selfcheck.run()
     except Exception:
         logger.exception("self-check selhal, pokračuji bez něj")
+    # Consent on since 0.23.0: add the system_log package once (homecraftcz/homecraft#906).
+    if client.error_reports and state.load_system_log()["state"] not in (
+        "active",
+        "own_config",
+        "no_packages",
+    ):
+        try:
+            await system_log.switch(True)  # a failure is the status `error`
+        except Exception:
+            logger.exception("system_log se nepodařilo nastavit")
     await asyncio.gather(client.run(), errors.Forwarder(client).run())
 
 

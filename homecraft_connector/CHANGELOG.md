@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.24.0
+
+- Se souhlasem **Posílat chybová hlášení Homecraftu** doplněk zapíše
+  `packages/homecraft_system_log.yaml` se `system_log: fire_event: true`, aby
+  chyby automatizací a skriptů Homecraftu z logu HA opravdu dorazily
+  (homecraftcz/homecraft#906); po vypnutí souhlasu soubor smaže. Souhlas
+  zapnutý už v 0.23.0 soubor doplní při startu doplňku.
+- Změna platí po restartu Home Assistantu: v dlaždici **Chybová hlášení** je
+  tlačítko **Restartovat Home Assistant** (jen po čisté kontrole konfigurace)
+  a **Zkontrolovat znovu**; doplněk po restartu ověří, že události chodí.
+  HA se sám nerestartuje nikdy.
+- Vlastní `system_log:` s `fire_event`, `!include` nebo konfigurace bez
+  `packages/`: doplněk nic nezapíše a panel ukáže, co doplnit. Konflikt
+  nahlášený v kontrole konfigurace HA soubor hned smaže.
+- Recorder ukládá `system_log_event` do historie; vyloučit je jde
+  `recorder: exclude: event_types: [system_log_event]` (popsáno v dokumentaci).
+
 ## 0.23.0
 
 - Přepínač **Posílat chybová hlášení Homecraftu** na Přehledu (ve výchozím
