@@ -87,6 +87,11 @@ dialog > * { min-width: 0; }
 dialog::backdrop { background: rgba(17, 19, 23, .45); }
 dialog .scroll { flex: 1 1 auto; max-height: none; border: 1px solid var(--line); border-radius: 10px; }
 dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.profiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.prof { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); }
+.prof input { flex: none; margin-top: 2px; }
+.prof .muted { font-size: 13px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -160,6 +165,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
       </div>
       <div class="row" style="margin-left:auto">
         <button id="netHa">Načíst z HA</button>
+        <button id="netScan">Doporučený sken</button>
         <button class="primary" id="netAdd">Přidat ručně</button>
       </div>
     </div>
@@ -212,6 +218,42 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc
     <div class="row" style="justify-content:flex-end">
       <button type="button" id="netImportCancel">Zrušit</button>
       <button type="button" class="primary" id="netImportAdd" disabled>Přidat vybraná (0)</button>
+    </div>
+  </dialog>
+
+  <dialog id="netScanDlg" aria-labelledby="netScanTitle">
+    <div class="row">
+      <h2 id="netScanTitle" style="margin:0">Doporučený sken sítě</h2>
+      <button type="button" id="netScanClose" aria-label="Zavřít" style="margin-left:auto">×</button>
+    </div>
+    <div class="muted">Podsíť z Home Assistantu · běží jen v tomto domě, nic se neposílá ven.</div>
+    <div class="profiles" id="netScanProfiles">
+      <label class="prof"><input type="checkbox" value="shelly" checked><span><strong>Shelly</strong><br>
+        <span class="muted">brány BLU, relé, zásuvky · port 80, /shelly</span></span></label>
+      <label class="prof"><input type="checkbox" value="camera" checked><span><strong>Kamery</strong><br>
+        <span class="muted">RTSP 554, ONVIF 80/8000</span></span></label>
+      <label class="prof"><input type="checkbox" value="nas" checked><span><strong>NAS</strong><br>
+        <span class="muted">Synology 5000/5001, SMB 445</span></span></label>
+      <label class="prof"><input type="checkbox" value="web"><span><strong>Ostatní web</strong><br>
+        <span class="muted">cokoli s HTTP 80/443</span></span></label>
+    </div>
+    <div class="row">
+      <button type="button" class="primary" id="netScanRun">Spustit sken</button>
+      <span id="netScanSummary" class="muted"></span>
+    </div>
+    <div class="scroll" id="netScanTable" hidden>
+      <table>
+        <thead><tr><th aria-label="Vybrat"></th><th>Zařízení</th><th>Adresa</th>
+          <th>Jméno v síti</th><th>Stav</th></tr></thead>
+        <tbody id="netScanBody"></tbody>
+      </table>
+    </div>
+    <div id="netScanMsg" class="msg"></div>
+    <p class="muted" style="margin:0">Jméno v síti (např. <span class="mono">shelly….local</span>) funguje jen
+      v domácí síti. Hesla se nezadávají ani neukládají; přihlášení k zařízením patří do Home Assistantu.</p>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" id="netScanCancel">Zrušit</button>
+      <button type="button" class="primary" id="netScanAdd" disabled>Přidat vybraná (0)</button>
     </div>
   </dialog>
   </div>
@@ -713,15 +755,17 @@ $("netDelete").onclick = () => {
 };
 
 let candidates = [];
+let scanned = [];
 
-function importCount() {
-  const n = [...$("netImportBody").querySelectorAll("input:checked")].length;
-  $("netImportAdd").textContent = "Přidat vybraná (" + n + ")";
-  $("netImportAdd").disabled = n === 0;
+// Shared by the HA import and the scan dialog; `p` is the ids' prefix.
+function importCount(p = "netImport") {
+  const n = [...$(p + "Body").querySelectorAll("input:checked")].length;
+  $(p + "Add").textContent = "Přidat vybraná (" + n + ")";
+  $(p + "Add").disabled = n === 0;
 }
 
-function renderCandidates() {
-  $("netImportBody").replaceChildren(...candidates.map((c, i) => {
+function renderCandidates(list = candidates, p = "netImport") {
+  $(p + "Body").replaceChildren(...list.map((c, i) => {
     const tr = document.createElement("tr");
     const pick = cell("");
     const box = document.createElement("input");
@@ -730,7 +774,7 @@ function renderCandidates() {
     box.checked = !c.saved;
     box.disabled = c.saved;
     box.setAttribute("aria-label", (c.saved ? "Už v seznamu: " : "Přidat ") + c.name);
-    box.onchange = importCount;
+    box.onchange = () => importCount(p);
     pick.append(box);
     const name = cell("", "wrap name");
     const strong = document.createElement("strong");
@@ -741,14 +785,14 @@ function renderCandidates() {
     name.append(strong, sub);
     const state = cell("");
     const badge = document.createElement("span");
-    badge.className = "badge " + (c.saved ? "grayb" : "warnb");
-    badge.textContent = c.saved ? "Už v seznamu" : "Nové";
+    badge.className = "badge " + (c.filled ? "on" : c.saved ? "grayb" : "warnb");
+    badge.textContent = c.filled ? "Doplněno .local" : c.saved ? "Už v seznamu" : "Nové";
     state.append(badge);
     tr.append(pick, name, cell(c.address, "mono"), cell(c.hostname || "—", "mono"), state);
     return tr;
   }));
-  $("netImportTable").hidden = candidates.length === 0;
-  importCount();
+  $(p + "Table").hidden = list.length === 0;
+  importCount(p);
 }
 
 $("netHa").onclick = async () => {
@@ -774,6 +818,48 @@ $("netImportAdd").onclick = async () => {
     show("netMsg", "Přidáno z HA: " + picked.length + ".");
   } catch (e) {
     show("netImportMsg", e.message, true);
+  }
+  renderDevices();
+};
+
+$("netScan").onclick = () => {
+  scanned = [];
+  renderCandidates(scanned, "netScan");
+  show("netScanMsg", "");
+  $("netScanSummary").textContent = "";
+  $("netScanDlg").showModal();
+};
+$("netScanRun").onclick = async () => {
+  const profiles = [...$("netScanProfiles").querySelectorAll("input:checked")].map((b) => b.value);
+  if (!profiles.length) return show("netScanMsg", "Vyberte aspoň jeden profil.", true);
+  $("netScanRun").disabled = true;
+  scanned = [];
+  renderCandidates(scanned, "netScan");
+  show("netScanMsg", "Skenuji síť, u /24 to trvá do půl minuty…");
+  try {
+    const r = await call("POST", "api/network-devices/scan", { profiles });
+    scanned = r.devices;
+    const fresh = scanned.filter((c) => !c.saved).length;
+    $("netScanSummary").textContent = "Podsíť " + r.subnets.join(", ") + " · " + r.addresses +
+      " adres · " + r.seconds + " s · nalezeno " + scanned.length + ", nových " + fresh;
+    show("netScanMsg", scanned.length ? "" : "Nic nenalezeno.");
+    if (scanned.some((c) => c.filled)) await loadDevices();
+  } catch (e) {
+    show("netScanMsg", "Sken se nepovedl: " + e.message, true);
+  }
+  $("netScanRun").disabled = false;
+  renderCandidates(scanned, "netScan");
+};
+$("netScanClose").onclick = $("netScanCancel").onclick = () => $("netScanDlg").close();
+$("netScanAdd").onclick = async () => {
+  const picked = [...$("netScanBody").querySelectorAll("input:checked")]
+    .map((box) => scanned[box.dataset.i]);
+  try {
+    devices = await call("PUT", "api/network-devices", [...devices, ...picked]);
+    $("netScanDlg").close();
+    show("netMsg", "Přidáno ze skenu: " + picked.length + ".");
+  } catch (e) {
+    show("netScanMsg", e.message, true);
   }
   renderDevices();
 };

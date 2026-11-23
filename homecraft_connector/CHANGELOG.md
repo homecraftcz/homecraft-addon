@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.19.0
+
+- Záložka **Síť** má tlačítko **Doporučený sken**: doplněk sám proskenuje
+  domácí síť podle zaškrtnutých profilů – **Shelly** (port 80, `GET /shelly`:
+  model, generace, MAC, FW; jméno v síti `<id>.local`), **Kamery** (RTSP 554
+  `OPTIONS`, ONVIF `GetDeviceInformation` na 80/8000 bez přihlášení, jinak
+  „Kamera, výrobce neznámý“), **NAS** (Synology 5000/5001, SMB 445) a
+  **Ostatní web** (80/443, ve výchozím stavu vypnuto). Výsledky jsou v dialogu
+  se zaškrtávátky jako u **Načíst z HA**; přidaná mají zdroj **Nové · jen sken**.
+- Podsíť bere z Supervisoru (`/network/info`, IPv4 rozhraní hostitele); jen
+  soukromé rozsahy (10/8, 172.16/12, 192.168/16) nejvýš /22, jinak sken
+  odmítne. Nejvýš 64 spojení najednou, každé 500 ms; doplněk zůstává v síti
+  hassio (bez `host_network`).
+- Už uložená zařízení (shoda IP, MAC nebo jména `.local`) se znovu nepřidají;
+  sken jim jen doplní chybějící jméno v síti (**Doplněno .local**).
+- Sken spouští jen člověk z panelu (`POST /api/network-devices/scan` s tajnou
+  hodnotou panelu), Homecraft na něj operaci nemá. Nic se neposílá ven,
+  hesla se nezadávají.
+
 ## 0.18.0
 
 - Záložka **Síť** má tlačítko **Načíst z HA**: doplněk přečte registr

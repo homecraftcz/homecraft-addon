@@ -1,5 +1,5 @@
 """The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause, the audit and the network devices (#631).
+pause, the audit and the network devices (#631) with their LAN scan (#633).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -12,6 +12,7 @@ holds. Limit: a script on the same origin (anything else served through HA)
 can fetch the page and read the nonce; HA's own frontend can do far more
 anyway, so the nonce is against other origins and blind requests."""
 
+import asyncio
 import logging
 import secrets
 import time
@@ -26,6 +27,7 @@ from . import (
     ha_token,
     network_devices,
     network_discovery,
+    network_scan,
     policy,
     settings,
     state,
@@ -225,6 +227,38 @@ async def _ha_candidates(request: web.Request) -> web.Response:
         )
 
 
+_SCAN_LOCK = asyncio.Lock()
+
+
+async def _scan(request: web.Request) -> web.Response:
+    """The recommended LAN scan (#633): only a person in the panel starts it
+    (POST, so the nonce guard applies); Homecraft has no operation for it.
+    Saves only hostnames missing on saved devices; new ones go through PUT."""
+    profiles = await _json_field(request, "profiles", list)
+    if not profiles or not all(isinstance(p, str) and p in network_scan.PROFILES for p in profiles):
+        raise web.HTTPBadRequest(text=f"profiles: some of {', '.join(network_scan.PROFILES)}")
+    if _SCAN_LOCK.locked():
+        return web.json_response({"ok": False, "error": "Sken už běží"}, status=409)
+    async with _SCAN_LOCK:
+        try:
+            async with aiohttp.ClientSession() as http:
+                result = await network_scan.scan(http, set(profiles))
+        except network_scan.ScanError as e:
+            logger.warning("Sken sítě odmítnut: %s", e)
+            return web.json_response({"ok": False, "error": str(e)}, status=400)
+        found, saved = network_scan.mark(result.pop("found"), network_devices.load())
+        if any(d["filled"] for d in found):
+            network_devices.save(saved)
+    logger.info(
+        "Sken sítě %s: %d adres, nalezeno %d, %.1f s",
+        ", ".join(result["subnets"]),
+        result["addresses"],
+        len(found),
+        result["seconds"],
+    )
+    return web.json_response({**result, "devices": found})
+
+
 def make_app(client: Client, pairing_code: str, verification_code: str) -> web.Application:
     # The network device list is the largest body (200 devices with URLs and notes).
     app = web.Application(middlewares=[_guard], client_max_size=1024 * 1024)
@@ -246,6 +280,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_get("/api/network-devices/ha", _ha_candidates)
+    app.router.add_post("/api/network-devices/scan", _scan)
     return app
 
 
