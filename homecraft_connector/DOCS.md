@@ -137,7 +137,29 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   a skripty zákazníka se neposílají nikdy (ani když jejich entita má ID, které
   by jinak dostala automatizace Homecraftu), traceback (`exception`) také ne, jen první
   řádek zprávy. HA vyvolá `system_log_event` jen s `system_log: fire_event: true`
-  v `configuration.yaml` (doplněk ho nezapisuje). Posílají se jen pole
+  a načte ho jen při startu. Se zapnutým souhlasem ho doplněk zapíše jako vlastní
+  balíček `packages/homecraft_system_log.yaml` (HA ho sloučí s případným vlastním
+  `system_log:` bez `fire_event`) a po vypnutí souhlasu ho smaže; cizí soubor
+  stejného jména nemění nikdy. Soubor se nezapíše, když `configuration.yaml` má
+  vlastní `system_log:` s `fire_event` (zapnutý stačí, jinak panel napíše, co
+  doplnit), když je `system_log:` načtený přes `!include`, když konfigurace
+  nenačítá `packages/` (`packages: !include_dir_named packages`, doplní ho Apply
+  Homecraftu), nebo když `check_config` hlásí konflikt s jiným nastavením
+  `system_log` (soubor se hned smaže, panel ukáže text z HA). Jiná chyba
+  v konfiguraci HA soubor nechá a panel ukáže text z HA (HA by restart
+  odmítl). Změna platí až po restartu Home Assistantu: panel ukáže
+  **Restartovat Home Assistant**, HA se sám nerestartuje nikdy a tlačítko ho
+  restartuje jen po čisté `check_config`. Po restartu z panelu, při startu
+  doplňku (pozná i restart HA provedený jinak) a tlačítkem **Zkontrolovat
+  znovu** doplněk ověří, že události chodí: zapíše do logu HA jeden řádek
+  úrovně ERROR loggeru `homecraft.connector` („test of error reports (not an
+  error)“) a počká na jeho `system_log_event` (Homecraftu se nikdy neposílá).
+  **Zkontrolovat znovu** po opravě vlastní konfigurace soubor zapíše, jakmile
+  to konfigurace dovolí. Recorder
+  ukládá `system_log_event` do historie jako každou jinou událost, tedy každé
+  varování a chybu HA po dobu `purge_keep_days`; doplněk nastavení recorderu
+  nemění, kdo to nechce, doplní `recorder: exclude: event_types:
+  [system_log_event]` (odběr doplňku to neovlivní). Posílají se jen pole
   z pevného seznamu v kódu doplňku (feature, verze, druh, kód, zdroj, uzel,
   entita, oblast, okruh, zpráva do 500 znaků, stopa rozhodnutí nejvýš 50
   plochých záznamů a 12 kB), ostatní se zahodí. Stejná chyba odejde hned

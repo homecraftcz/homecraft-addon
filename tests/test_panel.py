@@ -1,6 +1,6 @@
 """The panel: ingress only, CSRF guard, pause and reconnect."""
 
-from connector import panel, state
+from connector import panel, state, system_log
 
 CSRF = {panel.CSRF_HEADER: panel.NONCE}
 
@@ -162,17 +162,82 @@ def test_page_carries_the_nonce(run_panel):
     assert f'const NONCE = "{panel.NONCE}"' in html and "{{NONCE}}" not in html
 
 
-def test_error_reports_switch(run_panel, agent):
+def test_error_reports_switch(run_panel, agent, monkeypatch):
+    calls = []
+
+    async def enable(http, previous=None):
+        calls.append("enable")
+        return system_log.status("restart_needed")
+
+    async def disable():
+        calls.append("disable")
+        raise OSError("disk")  # a failure never takes the consent back
+
+    monkeypatch.setattr(system_log, "enable", enable)
+    monkeypatch.setattr(system_log, "disable", disable)
+
     async def scenario(http):
-        fresh = (await (await http.get("/api/status")).json())["error_reports"]
+        fresh = await (await http.get("/api/status")).json()
         page = await (await http.get("/")).text()
         no_csrf = await http.post("/api/error-reports", json={"enabled": True})
         bad = await http.post("/api/error-reports", json={"enabled": "yes"}, headers=CSRF)
         on = await http.post("/api/error-reports", json={"enabled": True}, headers=CSRF)
-        return fresh, page, no_csrf.status, bad.status, on.status, await on.json()
+        on_body = await on.json()
+        after_on = (await (await http.get("/api/status")).json())["system_log"]
+        off = await http.post("/api/error-reports", json={"enabled": False}, headers=CSRF)
+        return (
+            fresh,
+            page,
+            no_csrf.status,
+            bad.status,
+            on.status,
+            on_body,
+            after_on,
+            await off.json(),
+        )
 
-    fresh, page, no_csrf, bad, on, body = run_panel(scenario)
-    assert fresh is False and "Posílat chybová hlášení Homecraftu" in page
+    fresh, page, no_csrf, bad, on, body, after_on, off = run_panel(scenario)
+    assert fresh["error_reports"] is False and fresh["system_log"] == {"state": "off"}
+    assert "Posílat chybová hlášení Homecraftu" in page and 'id="systemLogRestart"' in page
     assert (no_csrf, bad, on) == (403, 400, 200)
-    assert body == {"ok": True, "error_reports": True}
-    assert agent.error_reports is True and state.load_error_reports() is True
+    assert body == {
+        "ok": True,
+        "error_reports": True,
+        "system_log": {"state": "restart_needed", "reason": None, "detail": None},
+    }
+    assert after_on["state"] == "restart_needed" and calls == ["enable", "disable"]
+    assert off["error_reports"] is False and off["system_log"]["state"] == "error"
+    assert agent.error_reports is False and state.load_error_reports() is False
+
+
+def test_system_log_routes_need_the_nonce(run_panel, monkeypatch):
+    async def never(*args):
+        raise AssertionError("called without the nonce")
+
+    monkeypatch.setattr(system_log, "restart", never)
+    monkeypatch.setattr(system_log, "recheck", never)
+
+    async def scenario(http):
+        return [
+            (await http.post("/api/system-log/restart")).status,
+            (await http.post("/api/system-log/check")).status,
+        ]
+
+    assert run_panel(scenario) == [403, 403]
+
+
+def test_system_log_restart_refused_by_check_config(run_panel, monkeypatch):
+    async def restart(http):
+        return ("ha_config_invalid", "Invalid config for 'light'")
+
+    monkeypatch.setattr(system_log, "restart", restart)
+
+    async def scenario(http):
+        r = await http.post("/api/system-log/restart", headers=CSRF)
+        return r.status, await r.json()
+
+    code, body = run_panel(scenario)
+    assert code == 409 and body["error"] == (
+        f"{panel.RESTART_ERRORS['ha_config_invalid']}: Invalid config for 'light'"
+    )
+    assert not panel._RESTART_LOCK.locked()

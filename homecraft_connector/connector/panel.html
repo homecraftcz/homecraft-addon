@@ -163,8 +163,19 @@ a.feat-link:hover { border-color: var(--accent); }
       <p class="muted">Posílají se jen chyby automatizací a skriptů Homecraftu a chyby z Node-RED
         (<code>homecraft_error</code>), jen povolená pole: feature, verze, kód, uzel, entita,
         oblast, okruh, zpráva a stopa rozhodnutí. Stejná chyba nejvýš jednou za 10 minut.
-        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.</p>
+        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.
+        Chyby z logu HA zapne doplněk souborem <code>packages/homecraft_system_log.yaml</code>
+        (<code>system_log: fire_event: true</code>). Recorder ukládá každé varování a chybu HA
+        jako událost <code>system_log_event</code> do historie; kdo to nechce, doplní
+        <code>recorder: exclude: event_types: [system_log_event]</code>.</p>
       <div id="errorReportsMsg" class="msg"></div>
+      <div id="systemLogState" class="msg"></div>
+      <div id="systemLogMessage" class="msg mono"></div>
+      <div class="row">
+        <button type="button" id="systemLogRestart" hidden>Restartovat Home Assistant</button>
+        <button type="button" id="systemLogCheck" hidden>Zkontrolovat znovu</button>
+      </div>
+      <div id="systemLogMsg" class="msg"></div>
     </section>
   </div>
 
@@ -398,6 +409,50 @@ function fmtTime(ts) {
   return ts ? new Date(ts * 1000).toLocaleString("cs-CZ") : "–";
 }
 
+// The saved status has a state and a reason code only; the texts live here.
+const OWN_FIX = " Doplň do něj `fire_event: true` a restartuj Home Assistant, jinak chyby automatizací Homecraftu z logu HA nedorazí.";
+const SYSTEM_LOG_TEXT = {
+  active: "Chyby z logu HA se posílají.",
+  restart_needed: "Je potřeba restart Home Assistantu, než se změna projeví.",
+  own_on: "`fire_event` máš zapnutý ve vlastní konfiguraci.",
+  own_config: "V configuration.yaml máš vlastní `system_log:`." + OWN_FIX,
+  no_packages: "Konfigurace nenačítá složku packages/. Doplň do configuration.yaml `system_log:` s `fire_event: true` a restartuj Home Assistant.",
+  conflict: "Home Assistant ohlásil konflikt s jiným nastavením `system_log` (text z HA níže). Soubor jsme nezapsali; nastav `fire_event: true` tam, kde `system_log` máš.",
+  ha_config_invalid: "Konfigurace Home Assistantu má chybu, která nesouvisí s doplňkem (text z HA níže). Home Assistant by restart odmítl: oprav ji a dej Zkontrolovat znovu.",
+  error: "Nastavení se nepodařilo, soubor jsme nezapsali. Zkus Zkontrolovat znovu nebo přepni souhlas znovu.",
+};
+const SYSTEM_LOG_REASON = {
+  tagged: "`system_log:` je načtený z jiného souboru (`!include`)." + OWN_FIX,
+  probe_failed: " Kontrola: událost z logu HA zatím nedorazila.",
+  restart_not_done: " Restart Home Assistantu se neprovedl.",
+};
+
+// `code` spans as <code>, the rest as text: never innerHTML with text from HA.
+function setCodeText(el, text) {
+  el.replaceChildren();
+  (text || "").split("`").forEach((part, i) => {
+    if (!part) return;
+    const node = i % 2 ? document.createElement("code") : document.createTextNode(part);
+    if (i % 2) node.textContent = part;
+    el.append(node);
+  });
+}
+
+function systemLogText(sl) {
+  if (sl.state === "own_config" && sl.reason === "tagged") return SYSTEM_LOG_REASON.tagged;
+  let text = SYSTEM_LOG_TEXT[sl.state] || "";
+  if (sl.state === "error" && sl.reason) text += " (" + sl.reason + ")";
+  else if (SYSTEM_LOG_REASON[sl.reason] && sl.reason !== "tagged") text += SYSTEM_LOG_REASON[sl.reason];
+  return text;
+}
+
+function renderSystemLog(sl) {
+  setCodeText($("systemLogState"), systemLogText(sl));
+  $("systemLogMessage").textContent = sl.detail || "";
+  $("systemLogRestart").hidden = sl.state !== "restart_needed";
+  $("systemLogCheck").hidden = ["off", "active"].includes(sl.state);
+}
+
 async function refreshStatus() {
   const s = await call("GET", "api/status");
   $("version").textContent = s.version;
@@ -412,6 +467,7 @@ async function refreshStatus() {
   $("pendingBadge").hidden = !s.pending_approval;
   if (document.activeElement !== $("paused")) $("paused").checked = s.paused;
   if (document.activeElement !== $("errorReports")) $("errorReports").checked = s.error_reports;
+  renderSystemLog(s.system_log || { state: "off" });
   $("tokenSet").hidden = !s.token_set || editingToken;
   $("tokenForm").hidden = s.token_set && !editingToken;
   $("tokenCancel").hidden = !s.token_set;
@@ -666,6 +722,35 @@ $("errorReports").onchange = async (ev) => {
     ev.target.checked = !ev.target.checked;
     show("errorReportsMsg", e.message, true);
   }
+  refresh();
+};
+
+// Two steps instead of confirm(): the Companion app's webview may suppress dialogs.
+let restartArmed = null;
+function disarmRestart() {
+  clearTimeout(restartArmed);
+  restartArmed = null;
+  $("systemLogRestart").textContent = "Restartovat Home Assistant";
+}
+$("systemLogRestart").onclick = async () => {
+  if (!restartArmed) {
+    $("systemLogRestart").textContent = "Home Assistant se restartuje, na minutu bude nedostupný. Pokračovat?";
+    restartArmed = setTimeout(disarmRestart, 5000);
+    return;
+  }
+  disarmRestart();
+  try {
+    await call("POST", "api/system-log/restart");
+    show("systemLogMsg", "Home Assistant se restartuje, po startu ověříme chyby z logu…");
+  } catch (e) { show("systemLogMsg", e.message, true); }
+  refresh();
+};
+
+$("systemLogCheck").onclick = async () => {
+  try {
+    await call("POST", "api/system-log/check");
+    show("systemLogMsg", "");
+  } catch (e) { show("systemLogMsg", e.message, true); }
   refresh();
 };
 
