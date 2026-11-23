@@ -97,12 +97,18 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   s tlačítkem **Aktualizovat znovu**. Položku, kterou Homecraft nenabízí, nebo
   druhé kliknutí do 5 s Homecraft nenainstaluje a jen pošle aktuální seznam.
   Pozastavený doplněk tlačítka zakáže a nic nepošle.
+- **Síť**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
+  v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
+  typu; přidat, upravit, smazat. Hesla se nezadávají: URL jen `http`, `https`,
+  `rtsp` a `rtsps`, bez `jméno:heslo@`. Seznam je v `/data/network_devices.json`
+  (přežije restart) a Homecraft ho zatím nečte. Počet zařízení je i na
+  dlaždici na Přehledu.
 - **Audit**: posledních 200 operací (čas, operace, cíl, výsledek, trvání).
   Cíl je typ příkazu WebSocketu, metoda a cesta HTTP nebo cesta souboru,
   nikdy obsah souborů, těla požadavků ani tokeny. Soubor `/data/audit.jsonl`
   drží posledních 1000 záznamů.
 
-Změny v panelu (token, pauza, připojení) přijme doplněk jen s tajnou hodnotou,
+Změny v panelu (token, pauza, připojení, síťová zařízení) přijme doplněk jen s tajnou hodnotou,
 kterou při každém startu vloží do stránky panelu. Cizí stránka ji nezná.
 Skript ze stejného původu (cokoli, co běží v Home Assistantu) si ale stránku
 panelu načíst a hodnotu přečíst může.

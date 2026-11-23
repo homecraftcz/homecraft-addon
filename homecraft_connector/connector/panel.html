@@ -36,6 +36,8 @@ button { font: inherit; border-radius: 8px; border: 1px solid var(--line); backg
   color: var(--text); padding: 6px 14px; cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { color: var(--bad); }
+input, select, textarea { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); min-width: 0; }
 input[type=password] { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
   background: var(--bg); color: var(--text); flex: 1 1 260px; min-width: 0; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
@@ -54,6 +56,7 @@ td.wrap { white-space: normal; overflow-wrap: anywhere; }
 td.ok { color: var(--ok); } td.bad { color: var(--bad); } td.warn { color: var(--warn); }
 .verification { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 2px; }
 .stack { display: grid; gap: 16px; }
+main > *, .stack > * { min-width: 0; }  /* wide tables scroll inside .scroll, not the page */
 .tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .tabs a { padding: 10px 14px; border-radius: 8px; color: var(--muted); text-decoration: none;
   font-weight: 600; white-space: nowrap; }
@@ -67,6 +70,16 @@ a.tile:hover { border-color: var(--accent); }
 .tile p { margin: 0; font-size: 13px; }
 @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tiles > section.tile { grid-column: span 2; } .tile-big { font-size: 22px; } }
+.chip { border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.warnb { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.grayb { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--text); }
+td.name { min-width: 180px; }
+.infob { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form .full { grid-column: 1 / -1; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -82,6 +95,7 @@ a.tile:hover { border-color: var(--accent); }
 
   <nav class="tabs" aria-label="Sekce">
     <a href="#overview">Přehled</a>
+    <a href="#network">Síť</a>
     <a href="#security">Zabezpečení</a>
     <a href="#audit">Audit</a>
   </nav>
@@ -96,6 +110,12 @@ a.tile:hover { border-color: var(--accent); }
       <span class="tile-k">Zabezpečení</span>
       <span class="tile-big tile-text" id="tSec">–</span>
       <span class="muted" id="tSecSub"></span>
+    </a>
+    <a class="card tile" href="#network">
+      <span class="tile-k">Síťová zařízení</span>
+      <span class="tile-big" id="tNet">–</span>
+      <span class="muted" id="tNetSub"></span>
+      <span><span class="badge" id="tNetNew">0 nových ze skenu</span></span>
     </a>
     <a class="card tile" href="#audit">
       <span class="tile-k">Audit</span>
@@ -123,6 +143,48 @@ a.tile:hover { border-color: var(--accent); }
     <p id="updatesEmpty" class="muted">–</p>
     <div id="updatesMsg" class="msg"></div>
   </section>
+
+  <div data-tab="network" class="stack" hidden>
+  <section class="card">
+    <div class="row">
+      <div>
+        <h2 style="margin:0">Síťová zařízení</h2>
+        <div class="muted">Adresy zůstávají v tomto Home Assistantu, bez hesel.</div>
+      </div>
+      <button class="primary" id="netAdd" style="margin-left:auto">Přidat ručně</button>
+    </div>
+    <div class="row" id="netFilters" style="margin:12px 0"></div>
+    <div class="scroll" id="netTable" hidden>
+      <table>
+        <thead><tr><th>Název</th><th>Typ</th><th>Adresa</th><th>Jméno v síti (.local)</th>
+          <th>Webové rozhraní</th><th>Zdroj</th><th>Používá</th><th></th></tr></thead>
+        <tbody id="netBody"></tbody>
+      </table>
+    </div>
+    <p id="netEmpty" class="muted">Zatím žádná zařízení.</p>
+    <div id="netMsg" class="msg"></div>
+  </section>
+
+  <section class="card" id="netEdit" hidden>
+    <h2 id="netEditTitle">Nové zařízení</h2>
+    <form id="netForm" class="form" autocomplete="off">
+      <label>Název <input id="nName" required maxlength="100"></label>
+      <label>Typ <select id="nKind"></select></label>
+      <label>Adresa (IP nebo jméno) <input id="nAddress" required maxlength="255" spellcheck="false"></label>
+      <label>Jméno v síti (.local) <input id="nHostname" maxlength="255" placeholder="shelly-xxxx.local" spellcheck="false"></label>
+      <label>MAC <input id="nMac" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" spellcheck="false"></label>
+      <label class="full">Webové rozhraní a streamy (jedna URL na řádek, bez jména a hesla)
+        <textarea id="nUrls" rows="3" spellcheck="false" placeholder="http://10.0.0.10"></textarea></label>
+      <label class="full">Poznámka <textarea id="nNote" rows="2" maxlength="1000"></textarea></label>
+      <div class="row full">
+        <button class="primary" type="submit">Uložit</button>
+        <button type="button" id="netCancel">Zrušit</button>
+        <button type="button" id="netDelete" class="danger" style="margin-left:auto">Smazat</button>
+      </div>
+    </form>
+    <div id="netFormMsg" class="msg"></div>
+  </section>
+  </div>
 
   <div data-tab="security" class="stack" hidden>
   <section class="card">
@@ -462,6 +524,165 @@ $("haTokenDelete").onclick = async () => {
   refresh();
 };
 
+// --- Network devices (#631) ----------------------------------------------
+const NET_KINDS = { shelly_gateway: "Brána", shelly: "Shelly", camera: "Kamera", nas: "NAS",
+  router: "Router", other: "Ostatní" };
+const NET_FILTERS = { shelly_gateway: "Brány", shelly: "Shelly", camera: "Kamery", nas: "NAS",
+  router: "Routery", other: "Ostatní" };
+const NET_SOURCES = { manual: ["Ručně", "infob"], ha: ["Z HA", "grayb"], scan: ["Nové · jen sken", "warnb"] };
+let devices = [];
+let netFilter = "";
+let netEditing = null;  // index in `devices`, -1 = new, null = form closed
+let netDeleteArmed = null;
+
+$("nKind").replaceChildren(...Object.entries(NET_KINDS).map(([k, label]) => new Option(label, k)));
+
+function cell(text, cls) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (cls) td.className = cls;
+  return td;
+}
+
+function urlCell(urls) {
+  const td = document.createElement("td");
+  td.className = "mono";
+  if (!urls.length) td.textContent = "—";
+  for (const u of urls) {
+    // The add-on allows only http(s)/rtsp(s); a browser opens only http(s).
+    const line = document.createElement("div");
+    const el = /^https?:\/\//i.test(u) ? document.createElement("a") : line;
+    el.textContent = u;
+    if (el !== line) { el.href = u; el.target = "_blank"; el.rel = "noopener noreferrer"; line.append(el); }
+    td.append(line);
+  }
+  return td;
+}
+
+function renderDevices() {
+  const counts = {};
+  for (const d of devices) counts[d.kind] = (counts[d.kind] || 0) + 1;
+  const fresh = devices.filter((d) => d.source === "scan").length;
+  $("tNet").textContent = devices.length;
+  $("tNetSub").textContent = Object.keys(NET_KINDS).filter((k) => counts[k])
+    .map((k) => counts[k] + "× " + NET_KINDS[k]).join(" · ") || "Zatím žádná zařízení";
+  $("tNetNew").textContent = fresh + (fresh === 1 ? " nové" : fresh < 5 && fresh ? " nová" : " nových") + " ze skenu";
+  $("tNetNew").className = "badge " + (fresh ? "warnb" : "");
+  if (netFilter && !counts[netFilter]) netFilter = "";
+
+  const chips = [["", "Vše", devices.length], ...Object.keys(NET_FILTERS).filter((k) => counts[k])
+    .map((k) => [k, NET_FILTERS[k], counts[k]])];
+  $("netFilters").replaceChildren(...chips.map(([k, label, n]) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label + " " + n;
+    b.setAttribute("aria-pressed", String(k === netFilter));
+    b.onclick = () => { netFilter = k; renderDevices(); };
+    return b;
+  }));
+
+  $("netBody").replaceChildren(...devices.map((d, i) => [d, i])
+    .filter(([d]) => !netFilter || d.kind === netFilter).map(([d, i]) => {
+      const tr = document.createElement("tr");
+      const name = cell("", "wrap name");
+      const strong = document.createElement("strong");
+      strong.textContent = d.name;
+      name.append(strong);
+      if (d.note) {
+        const note = document.createElement("div");
+        note.className = "muted";
+        note.textContent = d.note;
+        name.append(note);
+      }
+      const [srcLabel, srcCls] = NET_SOURCES[d.source] || [d.source, ""];
+      const src = cell("");
+      const badge = document.createElement("span");
+      badge.className = "badge " + srcCls;
+      badge.textContent = srcLabel;
+      src.append(badge);
+      const act = cell("");
+      const b = document.createElement("button");
+      b.textContent = "Upravit";
+      b.onclick = () => openDevice(i);
+      act.append(b);
+      tr.append(name, cell(NET_KINDS[d.kind] || d.kind), cell(d.address, "mono"),
+        cell(d.hostname || "—", "mono"), urlCell(d.urls), src, cell("—", "muted"), act);
+      return tr;
+    }));
+  $("netTable").hidden = devices.length === 0;
+  $("netEmpty").hidden = devices.length > 0;
+}
+
+async function loadDevices() {
+  devices = await call("GET", "api/network-devices");
+  renderDevices();
+}
+
+function disarmNetDelete() {
+  clearTimeout(netDeleteArmed);
+  netDeleteArmed = null;
+  $("netDelete").textContent = "Smazat";
+}
+
+function openDevice(i) {
+  const d = i >= 0 ? devices[i] : { name: "", kind: "other", address: "", hostname: "", urls: [], mac: null, note: "" };
+  netEditing = i;
+  disarmNetDelete();
+  $("netEditTitle").textContent = i >= 0 ? "Upravit zařízení" : "Nové zařízení";
+  $("nName").value = d.name;
+  $("nKind").value = d.kind;
+  $("nAddress").value = d.address;
+  $("nHostname").value = d.hostname;
+  $("nMac").value = d.mac || "";
+  $("nUrls").value = d.urls.join("\n");
+  $("nNote").value = d.note;
+  $("netDelete").hidden = i < 0;
+  show("netFormMsg", "");
+  $("netEdit").hidden = false;
+  $("netEdit").scrollIntoView({ block: "nearest" });
+  $("nName").focus();
+}
+
+function closeDevice() {
+  netEditing = null;
+  $("netEdit").hidden = true;
+}
+
+async function saveDevices(next, okText) {
+  try {
+    devices = await call("PUT", "api/network-devices", next);
+    closeDevice();
+    show("netMsg", okText);
+  } catch (e) {
+    show("netFormMsg", e.message, true);
+  }
+  renderDevices();
+}
+
+$("netAdd").onclick = () => openDevice(-1);
+$("netCancel").onclick = closeDevice;
+$("netForm").onsubmit = (ev) => {
+  ev.preventDefault();
+  const d = {
+    ...(netEditing >= 0 ? devices[netEditing] : { source: "manual" }),
+    name: $("nName").value, kind: $("nKind").value, address: $("nAddress").value,
+    hostname: $("nHostname").value, mac: $("nMac").value, note: $("nNote").value,
+    urls: $("nUrls").value.split("\n"),
+  };
+  const next = netEditing >= 0 ? devices.map((x, i) => (i === netEditing ? d : x)) : [...devices, d];
+  saveDevices(next, "Uloženo.");
+};
+$("netDelete").onclick = () => {
+  if (!netDeleteArmed) {
+    $("netDelete").textContent = "Opravdu smazat?";
+    netDeleteArmed = setTimeout(disarmNetDelete, 5000);
+    return;
+  }
+  disarmNetDelete();
+  saveDevices(devices.filter((_, i) => i !== netEditing), "Zařízení smazáno.");
+};
+
+loadDevices().catch((e) => show("netMsg", "Seznam se nepodařilo načíst: " + e.message, true));
 refresh();
 setInterval(refresh, 5000);
 </script>
