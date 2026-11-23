@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import re
+import socket
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -13,7 +14,17 @@ from dataclasses import dataclass, field
 import aiohttp
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from . import access_token, audit, core_config, files, http_proxy, identity, policy, ws_proxy
+from . import (
+    access_token,
+    audit,
+    core_config,
+    files,
+    http_proxy,
+    identity,
+    network_devices,
+    policy,
+    ws_proxy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -570,6 +581,9 @@ def _audit_target(req: dict) -> str:
         return str(req.get("path"))
     if op == "config.packages_include":
         return core_config.FILE
+    if op == "network_devices.get":
+        feature = req.get("feature")
+        return f"Síť (feature {feature})" if feature else "Síť"
     return ""
 
 
@@ -591,6 +605,13 @@ async def _dispatch(op: object, req: dict, conn: _Conn) -> object:
     if op == "config.packages_include":
         async with conn.ops:
             return await core_config.packages_include(conn.http)
+    if op == "network_devices.get":  # read-only (#634); `feature` is only for the audit
+        if not isinstance(req.get("feature") or "", str):
+            raise TypeError("feature")
+        # The Supervisor names the container after the slug ("_" -> "-"): Homecraft
+        # links to this panel with it.
+        slug = socket.gethostname().replace("-", "_")
+        return {"devices": network_devices.load(), "slug": slug}
     raise policy.OpError("unknown_op", str(op)[:64])
 
 
