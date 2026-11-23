@@ -13,7 +13,6 @@ import json
 import logging
 import re
 import time
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,7 +27,8 @@ DEDUP_WINDOW = 10 * 60
 FLUSH_EVERY = 5.0  # s
 MAX_REPORTS = 20  # per frame
 MAX_KEYS = 100  # distinct errors in memory
-HA_RETRY = 30  # s after HA dropped or refused
+HA_RETRY_FIRST = 3  # s after the first failed HA connection
+HA_RETRY = 30  # s after repeated failures
 MAX_TRACE = 50
 MAX_TRACE_BYTES = 12 * 1024
 FIELDS = {
@@ -44,6 +44,7 @@ FIELDS = {
 KINDS = ("domain", "exception")
 CIRCUIT_MAX = 32
 LEVELS = ("ERROR", "CRITICAL")
+SUBSCRIBE = ("homecraft_error", "system_log_event")
 
 # HA logs an automation's errors under `homeassistant.components.automation.<object_id>`
 # and a script's under `homeassistant.components.script.<object_id>`.
@@ -66,11 +67,16 @@ def _trace(value: object) -> list[dict]:
         flat = {k: v for k, v in item.items() if isinstance(k, str) and isinstance(v, _SCALARS)}
         if flat:
             trace.append(flat)
-    # Default json.dumps (ASCII escapes, spaces) is never smaller than the
-    # compact UTF-8 JSON, so the limit holds on Homecraft's side too.
-    while trace and len(json.dumps(trace)) > MAX_TRACE_BYTES:
-        trace.pop(0)
-    return trace
+    # Default json.dumps (ASCII escapes, ", " separators) is never smaller than
+    # the compact UTF-8 JSON, so the limit holds on Homecraft's side too.
+    # Size of json.dumps(trace): brackets, the entries and a ", " between them.
+    sizes = [len(json.dumps(e)) for e in trace]
+    total = 2 + sum(sizes) + 2 * max(len(sizes) - 1, 0)
+    drop = 0
+    while drop < len(sizes) and total > MAX_TRACE_BYTES:
+        total -= sizes[drop] + (2 if drop < len(sizes) - 1 else 0)
+        drop += 1
+    return trace[drop:]
 
 
 def clean(data: object) -> dict | None:
@@ -95,10 +101,16 @@ def clean(data: object) -> dict | None:
     return report
 
 
-def owned(config_root: Path) -> dict[str, tuple[str, str]]:
-    """entity_id → (feature, version) of the automations and scripts in Apply's
-    `packages/hfb_*.yaml` (those with the `# ha-builder:` marker)."""
-    index: dict[str, tuple[str, str]] = {}
+def _labelled(key: object, domain: str) -> bool:
+    """`automation`/`script` or a labelled `automation <label>` key of a package."""
+    return key == domain or (isinstance(key, str) and key.startswith(domain + " "))
+
+
+def owned(config_root: Path) -> dict[tuple[str, str], tuple[str, str]]:
+    """(domain, config id) → (feature, version) of the automations (their `id`)
+    and scripts (their key) in Apply's `packages/hfb_*.yaml` (those with the
+    `# ha-builder:` marker)."""
+    index: dict[tuple[str, str], tuple[str, str]] = {}
     for path in sorted((config_root / "packages").glob("hfb_*.yaml")):
         try:
             text = path.read_text(encoding="utf-8")
@@ -112,43 +124,64 @@ def owned(config_root: Path) -> dict[str, tuple[str, str]]:
             continue
         owner = marker.group(1), marker.group(2)
         for key, value in data.items():
-            if key == "automation" or (isinstance(key, str) and key.startswith("automation ")):
+            if _labelled(key, "automation"):
                 for item in value if isinstance(value, list) else [value]:
                     if isinstance(item, dict) and isinstance(item.get("id"), str):
-                        index[f"automation.{item['id']}"] = owner
-        scripts = data.get("script")
-        if isinstance(scripts, dict):
-            for key in scripts:
-                if isinstance(key, str):
-                    index[f"script.{key}"] = owner
+                        index[("automation", item["id"])] = owner
+            elif _labelled(key, "script") and isinstance(value, dict):
+                for name in value:
+                    if isinstance(name, str):
+                        index[("script", name)] = owner
     return index
 
 
-def _logger_match(data: object) -> re.Match | None:
+_cache: tuple[tuple, dict] | None = None
+
+
+def owned_cached(config_root: Path) -> dict[tuple[str, str], tuple[str, str]]:
+    """owned(), parsed again only when a package file's mtime or size changed."""
+    global _cache
+    try:
+        key = tuple(
+            (p.name, st.st_mtime_ns, st.st_size)
+            for p in sorted((config_root / "packages").glob("hfb_*.yaml"))
+            for st in [p.stat()]
+        )
+    except OSError:
+        key = None
+    if key is None or _cache is None or _cache[0] != key:
+        _cache = (key, owned(config_root))
+    return _cache[1]
+
+
+def log_entity(data: object) -> str | None:
+    """The automation or script entity a `system_log_event` of level ERROR or
+    CRITICAL is logged for, from the logger name; None for anything else."""
     if not isinstance(data, dict) or data.get("level") not in LEVELS:
         return None
     name = data.get("name")
-    return LOGGER_RE.fullmatch(name) if isinstance(name, str) else None
+    m = LOGGER_RE.fullmatch(name) if isinstance(name, str) else None
+    return f"{m.group(1)}.{m.group(2)}" if m else None
 
 
-def from_log(data: object, index: dict) -> dict | None:
-    """A `system_log_event` of Homecraft's automation or script as a report;
-    None for anything else (the customer's own automations never)."""
-    m = _logger_match(data)
-    if m is None:
+def from_log(data: dict, entity_id: str, config_id: str | None, index: dict) -> dict | None:
+    """A `system_log_event` (passed `log_entity` → `entity_id`) as a report when
+    the entity's config id (an automation's `id` attribute, a script's key) is
+    Homecraft's: in a package or `hfb_*`. The customer's own never, even when it
+    holds the entity ID a Homecraft automation would have had."""
+    if not config_id:
         return None
-    domain, object_id = m.groups()
-    entity_id = f"{domain}.{object_id}"
-    if entity_id in index:
-        feature, version = index[entity_id]
-    elif object_id.startswith("hfb_"):
+    domain, object_id = entity_id.split(".", 1)
+    if (domain, config_id) in index:
+        feature, version = index[(domain, config_id)]
+    elif config_id.startswith("hfb_"):
         feature, version = "unknown", None
     else:
         return None
     report = {
         "feature": feature[: FIELDS["feature"]],
         "kind": "log",
-        "code": object_id[: FIELDS["code"]] or "system_log",
+        "code": object_id[: FIELDS["code"]],
         "source": data["name"][: FIELDS["source"]],
         "entity_id": entity_id[: FIELDS["entity_id"]],
     }
@@ -167,17 +200,22 @@ def _iso(wall: datetime) -> str:
     return wall.astimezone(UTC).isoformat(timespec="seconds")
 
 
+def _key(report: dict) -> tuple:
+    return tuple(report.get(f) for f in ("feature", "code", "source", "entity_id"))
+
+
 class Dedup:
     """The same error (feature, code, source, entity_id) goes out at once and
     then at most once per DEDUP_WINDOW, merged with `count`; the merged report
     keeps the first occurrence's trace and message."""
 
     def __init__(self) -> None:
-        self._keys: dict[tuple, dict] = {}  # key → {"last_sent", "pending"}
+        # key → {"last_sent", "prev_sent", "pending"}
+        self._keys: dict[tuple, dict] = {}
         self._warned = False
 
-    def add(self, report: dict, now: float, wall: datetime) -> None:
-        key = tuple(report.get(f) for f in ("feature", "code", "source", "entity_id"))
+    def add(self, report: dict, wall: datetime) -> None:
+        key = _key(report)
         entry = self._keys.get(key)
         if entry is None:
             if len(self._keys) >= MAX_KEYS:
@@ -185,7 +223,7 @@ class Dedup:
                     logger.warning("Příliš mnoho různých chyb najednou, další se zahodí")
                     self._warned = True
                 return
-            entry = self._keys[key] = {"last_sent": None, "pending": None}
+            entry = self._keys[key] = {"last_sent": None, "prev_sent": None, "pending": None}
         iso = _iso(wall)
         if entry["pending"] is not None:
             entry["pending"]["count"] += 1
@@ -199,31 +237,64 @@ class Dedup:
             fresh = entry["last_sent"] is None or now - entry["last_sent"] >= DEDUP_WINDOW
             if entry["pending"] is not None and fresh:
                 out.append(entry["pending"])
-                entry["last_sent"], entry["pending"] = now, None
+                entry["prev_sent"], entry["last_sent"] = entry["last_sent"], now
+                entry["pending"] = None
             elif entry["pending"] is None and fresh:
                 del self._keys[key]
         if len(self._keys) < MAX_KEYS:
             self._warned = False
         return out
 
+    def unsent(self, reports: list[dict]) -> None:
+        """Reports from `due` that were dropped (offline, paused): gone, but they
+        do not count as sent, so the next occurrence goes out at once."""
+        for report in reports:
+            if entry := self._keys.get(_key(report)):
+                entry["last_sent"] = entry["prev_sent"]
+
 
 class Forwarder:
-    """Subscribes to HA's events while the consent is on and Homecraft is not
-    paused; `run` never ends."""
+    """Subscribes to HA's events while the consent is on, Homecraft is
+    connected and not paused; `run` never ends."""
 
     def __init__(self, client) -> None:
         self.client = client
         self.dedup = Dedup()
-        self._warned = False
+        self._failures = 0  # HA connection attempts failed in a row
+        self._http: aiohttp.ClientSession | None = None
 
     def active(self) -> bool:
-        return self.client.error_reports and not self.client.paused
+        c = self.client
+        return c.error_reports and not c.paused and c.connected
 
-    async def handle(
-        self, msg: dict, index_loader: Callable[[], dict], now: float, wall: datetime
-    ) -> None:
-        """One HA message; `index_loader` (owned packages) is read off the loop
-        and only for a log event of an automation or script."""
+    async def _index(self) -> dict:
+        return await asyncio.to_thread(owned_cached, settings.CONFIG_ROOT)
+
+    async def _config_id(self, entity_id: str) -> str | None:
+        """An automation's config id (its `id` state attribute; the entity ID
+        may belong to anyone), a script's key (the logger carries the key)."""
+        domain, object_id = entity_id.split(".", 1)
+        if domain == "script":
+            return object_id
+        if self._http is None:
+            return None
+        try:
+            async with self._http.get(
+                f"{settings.CORE_HTTP_URL}/api/states/{entity_id}",
+                headers={"Authorization": f"Bearer {settings.SUPERVISOR_TOKEN}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as r:
+                if r.status != 200:
+                    return None
+                state = await r.json()
+        except (aiohttp.ClientError, TimeoutError, ValueError):
+            return None
+        attrs = state.get("attributes") if isinstance(state, dict) else None
+        config_id = attrs.get("id") if isinstance(attrs, dict) else None
+        return config_id if isinstance(config_id, str) else None
+
+    async def handle(self, msg: dict, wall: datetime) -> None:
+        """One HA event message."""
         if not self.active() or msg.get("type") != "event":
             return
         event = msg.get("event")
@@ -232,21 +303,24 @@ class Forwarder:
         kind, data = event.get("event_type"), event.get("data")
         if kind == "homecraft_error":
             report = clean(data)
-        elif kind == "system_log_event" and _logger_match(data):
-            # ponytail: reads the packages on every such error (they are rare);
-            # cache by the mtime of packages/ once it shows.
-            report = from_log(data, await asyncio.to_thread(index_loader))
+        elif kind == "system_log_event" and (entity_id := log_entity(data)):
+            config_id = await self._config_id(entity_id)
+            report = from_log(data, entity_id, config_id, await self._index())
         else:
             return
         if report is not None:
-            self.dedup.add(report, now, wall)
+            self.dedup.add(report, wall)
 
     async def flush(self, now: float) -> None:
+        if not self.active():
+            return
         if due := self.dedup.due(now):
-            await self.client.report_errors(due)
+            sent = await self.client.report_errors(due)
+            self.dedup.unsent(due[sent:])
 
     async def run(self) -> None:
         async with aiohttp.ClientSession() as http:
+            self._http = http
             while True:
                 if not self.active():
                     self.dedup = Dedup()
@@ -255,20 +329,24 @@ class Forwarder:
                 try:
                     await self._listen(http)
                 except (policy.OpError, aiohttp.ClientError, TimeoutError, ConnectionError) as e:
-                    if not self._warned:
-                        logger.warning("Odběr chyb z Home Assistantu selhal: %s", type(e).__name__)
-                        self._warned = True
-                    await asyncio.sleep(HA_RETRY)
+                    self._failed(type(e).__name__)
                 except Exception:
                     logger.exception("Přeposílání chyb selhalo")
-                    await asyncio.sleep(HA_RETRY)
+                    self._failed(None)
+                else:
+                    continue  # stopped by the consent, pause or offline: no wait
+                await asyncio.sleep(HA_RETRY_FIRST if self._failures == 1 else HA_RETRY)
+
+    def _failed(self, what: str | None) -> None:
+        self._failures += 1
+        if self._failures == 1 and what:
+            logger.warning("Odběr chyb z Home Assistantu selhal: %s", what)
 
     async def _listen(self, http: aiohttp.ClientSession) -> None:
         ws = await ws_proxy.connect(http)
         try:
-            for i, event_type in enumerate(("homecraft_error", "system_log_event"), 1):
+            for i, event_type in enumerate(SUBSCRIBE, 1):
                 await ws.send_json({"id": i, "type": "subscribe_events", "event_type": event_type})
-            self._warned = False
             while self.active():
                 try:
                     m = await ws.receive(timeout=FLUSH_EVERY)
@@ -288,12 +366,17 @@ class Forwarder:
                         except ValueError:
                             msg = None
                         if isinstance(msg, dict):
-                            await self.handle(
-                                msg,
-                                lambda: owned(settings.CONFIG_ROOT),
-                                time.monotonic(),
-                                datetime.now(UTC),
-                            )
+                            if msg.get("type") == "result":
+                                self._subscribed(msg)
+                            else:
+                                await self.handle(msg, datetime.now(UTC))
                 await self.flush(time.monotonic())
         finally:
             await ws.close()
+
+    def _subscribed(self, msg: dict) -> None:
+        """A subscribe_events result: a refusal reconnects, both accepted reset the backoff."""
+        if msg.get("success") is not True:
+            raise ConnectionError("subscribe_events refused")
+        if msg.get("id") == len(SUBSCRIBE):
+            self._failures = 0

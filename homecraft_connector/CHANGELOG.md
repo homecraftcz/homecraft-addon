@@ -8,8 +8,9 @@
   z Node-RED (`homecraft_error`), aby šlo zjistit příčinu a automatizaci
   opravit. Jen povolená pole z pevného seznamu v doplňku, stejná chyba nejvýš
   jednou za 10 minut s počtem výskytů. Vlastní automatizace zákazníka se
-  neposílají nikdy. Bez spojení nebo při pauze se hlášení zahodí. V auditu
-  `errors.report` jen s kódem a entitou.
+  neposílají nikdy: rozhoduje ID z konfigurace, ne ID entity. Bez spojení
+  nebo při pauze se hlášení zahodí. V auditu jeden záznam `errors.report`
+  na odeslanou zprávu, jen s počtem a kódy.
 
 ## 0.22.0
 

@@ -1,9 +1,11 @@
 """Error reports to Homecraft (#31): allowlist, log rule, dedup, consent."""
 
 import asyncio
+import contextlib
 import json
 from datetime import UTC, datetime, timedelta
 
+import aiohttp
 import pytest
 from aiohttp import web
 
@@ -109,13 +111,32 @@ def _packages(root):
 
 def test_owned(tmp_path):
     _packages(tmp_path)
+    (tmp_path / "packages" / "hfb_labelled.yaml").write_text(
+        "# ha-builder: notifications@2.0\nscript notify:\n  hfb_notify:\n    sequence: []\n"
+    )
     assert errors.owned(tmp_path) == {
-        "automation.heating_plans_sweep_circuit_demo": ("heating", "1.19.0-beta.5"),
-        "automation.hfb_extra": ("heating", "1.19.0-beta.5"),
-        "script.heating_boost_circuit_demo": ("heating", "1.19.0-beta.5"),
-        "automation.hfb_energy_tariff": ("energy", "1.0.0"),
+        ("automation", "heating_plans_sweep_circuit_demo"): ("heating", "1.19.0-beta.5"),
+        ("automation", "hfb_extra"): ("heating", "1.19.0-beta.5"),
+        ("script", "heating_boost_circuit_demo"): ("heating", "1.19.0-beta.5"),
+        ("automation", "hfb_energy_tariff"): ("energy", "1.0.0"),
+        ("script", "hfb_notify"): ("notifications", "2.0"),
     }
     assert errors.owned(tmp_path / "missing") == {}
+
+
+def test_owned_cached_parses_only_after_a_change(tmp_path, monkeypatch):
+    _packages(tmp_path)
+    monkeypatch.setattr(errors, "_cache", None)
+    calls = []
+    real = errors.owned
+    monkeypatch.setattr(errors, "owned", lambda root: calls.append(1) or real(root))
+    first = errors.owned_cached(tmp_path)
+    assert errors.owned_cached(tmp_path) is first and len(calls) == 1
+    (tmp_path / "packages" / "hfb_energy.yaml").write_text(
+        "# ha-builder: energy@1.0.1\nautomation:\n  id: hfb_energy_tariff\n"
+    )
+    assert errors.owned_cached(tmp_path)[("automation", "hfb_energy_tariff")][1] == "1.0.1"
+    assert len(calls) == 2
 
 
 def log(name, level="ERROR", message=None):
@@ -128,25 +149,43 @@ def log(name, level="ERROR", message=None):
     }
 
 
+AUTO = "homeassistant.components.automation."
+
+
+def test_log_entity():
+    assert errors.log_entity(log(AUTO + "a")) == "automation.a"
+    assert errors.log_entity(log("homeassistant.components.script.b", "CRITICAL")) == "script.b"
+    assert errors.log_entity(log(AUTO + "a", "WARNING")) is None
+    assert errors.log_entity(log("homeassistant.helpers.template")) is None
+    assert errors.log_entity(log(AUTO + "a.b")) is None
+    assert errors.log_entity("x") is None
+
+
 def test_from_log(tmp_path):
     _packages(tmp_path)
     index = errors.owned(tmp_path)
-    name = "homeassistant.components.automation.heating_plans_sweep_circuit_demo"
-    assert errors.from_log(log(name), index) == {
+    name = AUTO + "heating_plans_sweep_circuit_demo"
+    entity = "automation.heating_plans_sweep_circuit_demo"
+    assert errors.from_log(log(name), entity, "heating_plans_sweep_circuit_demo", index) == {
         "feature": "heating",
         "version": "1.19.0-beta.5",
         "kind": "log",
         "code": "heating_plans_sweep_circuit_demo",
         "source": name,
-        "entity_id": "automation.heating_plans_sweep_circuit_demo",
+        "entity_id": entity,
         "message": "Error in action: boom",
     }
-    r = errors.from_log(log("homeassistant.components.script.hfb_other", "CRITICAL", "x"), index)
+    r = errors.from_log(
+        log("homeassistant.components.script.hfb_other", "CRITICAL", "x"),
+        "script.hfb_other",
+        "hfb_other",
+        index,
+    )
     assert (r["feature"], r["entity_id"], r["message"]) == ("unknown", "script.hfb_other", "x")
     assert "version" not in r
-    assert errors.from_log(log("homeassistant.components.automation.my_lights"), index) is None
-    assert errors.from_log(log(name, "WARNING"), index) is None
-    assert errors.from_log(log("homeassistant.helpers.template"), index) is None
+    # the customer's own: decided by its config id, not by the entity ID
+    assert errors.from_log(log(name), entity, "1700000000000", index) is None
+    assert errors.from_log(log(name), entity, None, index) is None
 
 
 # --- dedup -----------------------------------------------------------------
@@ -156,7 +195,7 @@ def test_dedup_merges_a_flood():
     d = errors.Dedup()
     sent = []
     for t in range(0, 1800, 2):
-        d.add({"feature": "h", "code": "c", "trace": [{"t": t}]}, t, at(t))
+        d.add({"feature": "h", "code": "c", "trace": [{"t": t}]}, at(t))
         sent += [(t, r) for r in d.due(t)]
     assert [(t, r["count"]) for t, r in sent] == [(0, 1), (600, 300), (1200, 300)]
     t, second = sent[1]
@@ -166,16 +205,27 @@ def test_dedup_merges_a_flood():
 
 def test_dedup_keys_and_cap(caplog):
     d = errors.Dedup()
-    d.add({"code": "c", "entity_id": "a"}, 0, T0)
-    d.add({"code": "c", "entity_id": "b"}, 0, T0)
+    d.add({"code": "c", "entity_id": "a"}, T0)
+    d.add({"code": "c", "entity_id": "b"}, T0)
     assert len(d.due(0)) == 2
     d = errors.Dedup()
     for i in range(errors.MAX_KEYS + 10):
-        d.add({"code": f"k{i}"}, 1, T0)
+        d.add({"code": f"k{i}"}, T0)
     assert len(d.due(1)) == errors.MAX_KEYS
     assert caplog.text.count("zahodí") == 1
     # a quiet key is forgotten after the window
     assert d.due(1 + errors.DEDUP_WINDOW) == [] and d._keys == {}
+
+
+def test_dedup_unsent_does_not_count_as_sent():
+    d = errors.Dedup()
+    d.add({"code": "c"}, T0)
+    dropped = d.due(0)
+    d.unsent(dropped)
+    d.add({"code": "c"}, T0)
+    assert [r["count"] for r in d.due(5)] == [1]  # at once, not after the window
+    d.add({"code": "c"}, T0)
+    assert d.due(10) == []
 
 
 # --- Forwarder -------------------------------------------------------------
@@ -193,12 +243,12 @@ def event(event_type, data):
     return {"id": 1, "type": "event", "event": {"event_type": event_type, "data": data}}
 
 
-def _forward(agent, events, now=0.0):
-    fw = errors.Forwarder(agent)
+def _forward(agent, events, now=0.0, fw=None):
+    fw = fw or errors.Forwarder(agent)
 
     async def go():
         for e in events:
-            await fw.handle(e, dict, now, T0)
+            await fw.handle(e, T0)
         await fw.flush(now)
 
     asyncio.run(go())
@@ -213,7 +263,7 @@ def test_forwarder_needs_consent_and_connection(agent):
     agent.error_reports, agent.paused = True, True
     assert not _forward(agent, one).dedup._keys
     agent.paused, agent.connected = False, False
-    _forward(agent, one)  # offline: dropped, not kept for later
+    assert not _forward(agent, one).dedup._keys  # offline: not kept for later
     assert conn.sent == [] and audit.recent() == []
 
     agent.connected = True
@@ -234,85 +284,167 @@ def test_forwarder_needs_consent_and_connection(agent):
             ],
         }
     ]
-    assert [(a["op"], a["target"]) for a in audit.recent()] == [("errors.report", "c climate.x")]
+    assert [(a["op"], a["target"]) for a in audit.recent()] == [("errors.report", "1× c")]
 
 
 def test_forwarder_frames_of_twenty(agent):
     conn = _FakeConn()
     agent._conn, agent.connected, agent.error_reports = conn, True, True
     many = [
-        event("homecraft_error", {"kind": "domain", "code": f"c{i}", "trace": [{"s": "x"}]})
+        event("homecraft_error", {"kind": "domain", "code": f"c{i:02}", "trace": [{"s": "x"}]})
         for i in range(45)
     ]
     _forward(agent, many)
     assert [len(f["reports"]) for f in conn.sent] == [20, 20, 5]
     assert all("id" not in f for f in conn.sent)
-    targets = {a["target"] for a in audit.recent()}
-    assert len(targets) == 45 and "c0" in targets  # code only: no trace, no message
+    # one entry per frame: the count and codes, no trace, no message
+    assert [a["target"] for a in reversed(audit.recent())][2] == "5× c40, c41, c42, c43, c44"
+    assert len(audit.recent()) == 3
 
 
-def test_forwarder_reads_packages_only_for_matching_logs(agent):
-    conn = _FakeConn()
+def test_report_errors_rechecks_before_every_frame(agent):
+    class PauseAfterFirst(_FakeConn):
+        async def send(self, data):
+            await super().send(data)
+            agent.paused = True
+
+    conn = PauseAfterFirst()
     agent._conn, agent.connected, agent.error_reports = conn, True, True
-    loads = []
-    fw = errors.Forwarder(agent)
+    reports = [{"code": f"c{i}"} for i in range(45)]
+    assert asyncio.run(agent.report_errors(reports)) == 20
+    assert len(conn.sent) == 1
 
-    def loader():
-        loads.append(1)
-        return {"automation.a": ("heating", "1.0")}
 
-    async def go():
-        await fw.handle(event("system_log_event", log("homeassistant.core")), loader, 0, T0)
-        await fw.handle(
-            event("system_log_event", log("homeassistant.components.automation.a")), loader, 0, T0
-        )
-        await fw.flush(0)
+def test_forwarder_dropped_reports_are_not_marked_sent(agent):
+    class Closed:
+        async def send(self, data):
+            raise RuntimeError("closing transport")
 
-    asyncio.run(go())
-    assert len(loads) == 1
-    assert conn.sent[0]["reports"][0]["feature"] == "heating"
+    agent._conn, agent.connected, agent.error_reports = Closed(), True, True
+    one = [event("homecraft_error", {"kind": "domain", "code": "c"})]
+    fw = _forward(agent, one)
+    conn = _FakeConn()
+    agent._conn = conn
+    _forward(agent, one, now=5, fw=fw)
+    assert len(conn.sent) == 1  # not held back by the window
+
+
+@contextlib.asynccontextmanager
+async def fake_ha(monkeypatch, states=None, refuse_first=False):
+    """HA's WebSocket (auth, subscribe_events) and REST /api/states."""
+    seen: list[dict] = []
+    connections: list[web.WebSocketResponse] = []
+
+    async def websocket(request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        connections.append(ws)
+        await ws.send_json({"type": "auth_required"})
+        await ws.receive_json()
+        await ws.send_json({"type": "auth_ok"})
+        refuse = refuse_first and len(connections) == 1
+        async for m in ws:
+            cmd = m.json()
+            seen.append(cmd)
+            ok = not (refuse and cmd["id"] == 2)
+            await ws.send_json({"id": cmd["id"], "type": "result", "success": ok})
+        return ws
+
+    async def state(request):
+        entity = request.match_info["entity"]
+        if entity not in (states or {}):
+            return web.json_response({"message": "Entity not found."}, status=404)
+        return web.json_response({"entity_id": entity, "attributes": {"id": states[entity]}})
+
+    app = web.Application()
+    app.router.add_get("/ws", websocket)
+    app.router.add_get("/api/states/{entity}", state)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    monkeypatch.setattr(settings, "CORE_WS_URL", f"ws://127.0.0.1:{port}/ws")
+    monkeypatch.setattr(settings, "CORE_HTTP_URL", f"http://127.0.0.1:{port}")
+    monkeypatch.setattr(errors, "FLUSH_EVERY", 0.05)
+    try:
+        yield seen, connections
+    finally:
+        await runner.cleanup()
+
+
+async def _until(check, timeout=5.0):
+    async with asyncio.timeout(timeout):
+        while not check():
+            await asyncio.sleep(0.02)
 
 
 def test_forwarder_run_subscribes(agent, monkeypatch):
-    seen: list[dict] = []
-    connections: list[int] = []
+    agent.connected = True
 
     async def scenario():
-        got = asyncio.Event()
+        async with fake_ha(monkeypatch) as (seen, connections):
+            task = asyncio.create_task(errors.Forwarder(agent).run())
+            await asyncio.sleep(0.3)
+            assert not connections  # no consent: no connection at all
+            agent.error_reports = True
+            await _until(lambda: len(seen) == 2)
+            task.cancel()
+            return seen
 
-        async def websocket(request):
-            connections.append(1)
-            ws = web.WebSocketResponse()
-            await ws.prepare(request)
-            await ws.send_json({"type": "auth_required"})
-            await ws.receive_json()
-            await ws.send_json({"type": "auth_ok"})
-            for _ in range(2):
-                seen.append(await ws.receive_json())
-            got.set()
-            await ws.receive()
-            return ws
-
-        app = web.Application()
-        app.router.add_get("/ws", websocket)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "127.0.0.1", 0)
-        await site.start()
-        port = site._server.sockets[0].getsockname()[1]
-        monkeypatch.setattr(settings, "CORE_WS_URL", f"ws://127.0.0.1:{port}/ws")
-        monkeypatch.setattr(errors, "FLUSH_EVERY", 0.05)
-
-        task = asyncio.create_task(errors.Forwarder(agent).run())
-        await asyncio.sleep(0.3)
-        assert not connections  # no consent: no connection at all
-        agent.error_reports = True
-        await asyncio.wait_for(got.wait(), 5)
-        task.cancel()
-        await runner.cleanup()
-
-    asyncio.run(scenario())
+    seen = asyncio.run(scenario())
     assert [(m["type"], m["event_type"]) for m in seen] == [
         ("subscribe_events", "homecraft_error"),
         ("subscribe_events", "system_log_event"),
+    ]
+
+
+def test_forwarder_refused_subscription_reconnects_quickly(agent, monkeypatch, caplog):
+    agent.connected, agent.error_reports = True, True
+    monkeypatch.setattr(errors, "HA_RETRY_FIRST", 0.05)
+    monkeypatch.setattr(errors, "HA_RETRY", 60)
+
+    async def scenario():
+        async with fake_ha(monkeypatch, refuse_first=True) as (seen, connections):
+            fw = errors.Forwarder(agent)
+            task = asyncio.create_task(fw.run())
+            await _until(lambda: len(seen) == 4)
+            await asyncio.sleep(0.1)
+            task.cancel()
+            return len(connections), fw._failures
+
+    assert asyncio.run(scenario()) == (2, 0)
+    assert "ConnectionError" in caplog.text
+
+
+def test_forwarder_attributes_logs_by_config_id(agent, monkeypatch, tmp_path):
+    """The customer's automation holds automation.heating_window_open, Homecraft's
+    (config id heating_window_open) got _2: only Homecraft's goes out."""
+    p = tmp_path / "packages"
+    p.mkdir()
+    (p / "hfb_heating.yaml").write_text(
+        "# ha-builder: heating@1.0.0\nautomation:\n  - id: heating_window_open\n"
+    )
+    monkeypatch.setattr(settings, "CONFIG_ROOT", tmp_path)
+    monkeypatch.setattr(errors, "_cache", None)
+    conn = _FakeConn()
+    agent._conn, agent.connected, agent.error_reports = conn, True, True
+    states = {
+        "automation.heating_window_open": "1700000000000",
+        "automation.heating_window_open_2": "heating_window_open",
+    }
+
+    async def scenario():
+        async with fake_ha(monkeypatch, states):
+            async with aiohttp.ClientSession() as http:
+                fw = errors.Forwarder(agent)
+                fw._http = http
+                for obj in ("heating_window_open", "heating_window_open_2", "gone"):
+                    await fw.handle(event("system_log_event", log(AUTO + obj)), T0)
+                await fw.flush(0)
+
+    asyncio.run(scenario())
+    reports = [r for f in conn.sent for r in f["reports"]]
+    assert [(r["entity_id"], r["feature"]) for r in reports] == [
+        ("automation.heating_window_open_2", "heating")
     ]

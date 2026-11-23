@@ -371,22 +371,25 @@ class Client:
         # says what it made of it, a refusal included.
         offered.update(state="running", message="")
 
-    async def report_errors(self, reports: list[dict]) -> None:
+    async def report_errors(self, reports: list[dict]) -> int:
         """`errors.report` (no `id`, no reply), at most errors.MAX_REPORTS per
-        frame. Offline, paused or without consent the reports are dropped."""
-        conn = self._conn
-        if conn is None or not self.connected or self.paused or not self.error_reports:
-            return
+        frame; returns how many went out. Offline, paused or without consent the
+        rest is dropped (checked before every frame)."""
+        sent = 0
         for i in range(0, len(reports), errors.MAX_REPORTS):
+            conn = self._conn
+            if conn is None or not self.connected or self.paused or not self.error_reports:
+                break
             chunk = reports[i : i + errors.MAX_REPORTS]
             try:
                 await conn.send({"op": "errors.report", "reports": chunk})
             except (ConnectionError, RuntimeError, aiohttp.ClientError):
-                return
-            for r in chunk:  # code and entity only, never the trace or message
-                audit.record(
-                    "errors.report", f"{r['code']} {r.get('entity_id') or ''}".strip(), True
-                )
+                break
+            sent += len(chunk)
+            # One entry per frame: the count and codes, never a trace or message.
+            codes = ", ".join(sorted({r["code"] for r in chunk}))
+            audit.record("errors.report", f"{len(chunk)}× {codes}", True)
+        return sent
 
     def _failed(self, outcome: str, message: str) -> str:
         logger.warning("%s", message)
