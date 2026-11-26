@@ -53,7 +53,7 @@ def test_normalizes_a_device():
         {"hostname": "bad_name.local"},
         {"mac": "a8:03:2a-b1:c2:d4"},
         {"kind": "toaster"},
-        {"source": "homecraft"},
+        {"source": "cloud"},
         {"note": "x" * 1001},
         {"name": 5},
     ],
@@ -102,3 +102,13 @@ def test_panel_api(run_panel):
     empty, no_csrf, bad, bad_ok, ok, after = run_panel(scenario)
     assert (empty, no_csrf, bad, bad_ok, ok) == ([], 403, 400, False, 200)
     assert after == network_devices.load() and after[0]["mac"] == "A8:03:2A:B1:C2:D4"
+
+
+def test_hosts_are_the_stored_addresses_and_names():
+    network_devices.save(
+        [
+            {"name": "Mesh", "address": "10.0.0.2", "hostname": "Mesh.local"},
+            {"name": "NAS", "address": "nas.lan"},
+        ]
+    )
+    assert network_devices.hosts() == {"10.0.0.2", "mesh.local", "nas.lan"}

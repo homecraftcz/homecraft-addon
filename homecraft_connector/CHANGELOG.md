@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.25.0
+
+- Integraci Ping smí Homecraft (feature Domácí síť, homecraftcz/homecraft#938)
+  založit i na adresu v domácí síti, ale jen na tu, kterou uživatel sám uložil
+  v záložce **Síť** (IP/adresa nebo jméno `.local`). Jinou adresu v LAN doplněk
+  dál odmítne; Homecraft si ji vybrat nesmí. Mimo LAN dál jen `1.1.1.1`.
+- Zařízení, která do záložky **Síť** přenese Homecraft (`network_devices.import`),
+  mají zdroj **Z Homecraftu** a ping na ně nejde, dokud je uživatel v panelu
+  neuloží (pak jsou **Ručně**). Zařízení importovaná dřív zůstávají **Ručně**.
+
 ## 0.24.0
 
 - Se souhlasem **Posílat chybová hlášení Homecraftu** doplněk zapíše

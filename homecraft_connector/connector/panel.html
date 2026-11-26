@@ -826,7 +826,8 @@ const NET_KINDS = { shelly_gateway: "Brána", shelly: "Shelly", camera: "Kamera"
   router: "Router", other: "Ostatní" };
 const NET_FILTERS = { shelly_gateway: "Brány", shelly: "Shelly", camera: "Kamery", nas: "NAS",
   router: "Routery", other: "Ostatní" };
-const NET_SOURCES = { manual: ["Ručně", "infob"], ha: ["Z HA", "grayb"], scan: ["Nové · jen sken", "warnb"] };
+const NET_SOURCES = { manual: ["Ručně", "infob"], ha: ["Z HA", "grayb"], scan: ["Nové · jen sken", "warnb"],
+  homecraft: ["Z Homecraftu · uložit pro ping", "warnb"] };
 let devices = [];
 let netFilter = "";
 let netEditing = null;  // index in `devices`, -1 = new, null = form closed
@@ -968,7 +969,8 @@ $("netCancel").onclick = closeDevice;
 $("netForm").onsubmit = (ev) => {
   ev.preventDefault();
   const d = {
-    ...(netEditing >= 0 ? devices[netEditing] : { source: "manual" }),
+    ...(netEditing >= 0 ? devices[netEditing] : {}),
+    source: netEditing >= 0 && devices[netEditing].source !== "homecraft" ? devices[netEditing].source : "manual",
     name: $("nName").value, kind: $("nKind").value, address: $("nAddress").value,
     hostname: $("nHostname").value, mac: $("nMac").value, note: $("nNote").value,
     urls: $("nUrls").value.split("\n"),

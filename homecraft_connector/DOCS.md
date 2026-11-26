@@ -186,7 +186,8 @@ serveru): příkazy WebSocketu, které features potřebují (registry, pomocníc
 dashboardy, `reload` služby, `scheduler.edit`, doplňky Node-RED, go2rtc,
 InfluxDB a Grafana), několik REST adres (kontrola konfigurace, config flow
 integrací, které zakládá Apply: InfluxDB, SQL, Speedtest, Ping, Holiday,
-System Monitor, Scheduler a Browser Mod) a soubory jen v `packages/`,
+System Monitor, Scheduler a Browser Mod; Ping jen na `1.1.1.1` nebo na zařízení
+uložené v záložce **Síť**) a soubory jen v `packages/`,
 `custom_templates/` a `themes/` (`configuration.yaml` jen ke čtení). Cokoli
 jiného odmítne s chybou `not_allowed`.
 
@@ -196,7 +197,9 @@ nese název feature, která adresu potřebuje; ten se zapíše do auditu.
 Jedinou výjimkou je jednorázový přesun dřívějšího seznamu z Homecraftu
 (`network_devices.import`, v auditu **Síť (import z Homecraftu)**): doplněk
 přidá jen nová zařízení (shoda podle IP nebo MAC) a uloženým doplní prázdná
-pole, nic nepřepíše ani nesmaže.
+pole, nic nepřepíše ani nesmaže. Nová zařízení z importu mají zdroj
+**Z Homecraftu**; integraci Ping na ně Homecraft nezaloží, dokud je uživatel
+v panelu neuloží.
 
 Integrace z Marketplace / HACS: doplněk smí přečíst seznam repozitářů
 (`marketplace/repositories/list`, `hacs/repositories/list`) a nechat

@@ -400,6 +400,7 @@ OPTIONS = {"unit_of_measurement": "MiB", "device_class": "data_size", "state_cla
         ("speedtestdotnet", {}, True),
         ("ping", {"host": "1.1.1.1"}, True),
         ("ping", {"host": "10.0.0.1"}, False),  # no LAN scan
+        ("ping", {"host": 1}, False),
         ("holiday", {"country": "CZ"}, True),
         ("holiday", {"country": ["CZ"]}, False),
         ("sql", {"name": "HFB recorder database size"}, True),
@@ -416,6 +417,20 @@ OPTIONS = {"unit_of_measurement": "MiB", "device_class": "data_size", "state_cla
 def test_flow_step_allowed(handler, body, expected):
     assert flow_step_allowed(handler, json.dumps(body).encode()) is expected
     assert not flow_step_allowed(handler, b"not json")
+
+
+def test_ping_only_listed_lan_hosts():
+    """lan (homecraft#938): a LAN host only when the user listed it on the Síť tab."""
+    hosts = frozenset({"10.0.0.2", "mesh.local"})
+    for host, expected in [
+        ("10.0.0.2", True),
+        ("Mesh.local", True),
+        ("10.0.0.3", False),
+        ("1.1.1.1", True),
+    ]:
+        assert flow_step_allowed("ping", json.dumps({"host": host}).encode(), hosts) is expected, (
+            host
+        )
 
 
 @pytest.mark.parametrize(("body", "expected"), FLOW_STEPS)

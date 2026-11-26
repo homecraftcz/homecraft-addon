@@ -145,7 +145,13 @@ def test_network_devices_import_op(tmp_path, monkeypatch):
     )
     devices = [
         # same IP: stored name wins, the empty note is filled
-        {"name": "Jiné jméno", "kind": "other", "address": "10.0.0.10", "note": "půda"},
+        {
+            "name": "Jiné jméno",
+            "kind": "other",
+            "address": "10.0.0.10",
+            "note": "půda",
+            "hostname": "evil.local",  # never filled: hosts() would trust it (#938)
+        },
         # same MAC under another address: nothing missing to fill
         {"name": "NAS 2", "kind": "nas", "address": "10.0.0.6", "mac": "AA-BB-CC-DD-EE-FF"},
         {"name": "Kamera", "kind": "camera", "address": "10.0.0.20", "source": "ha"},
@@ -167,9 +173,11 @@ def test_network_devices_import_op(tmp_path, monkeypatch):
     assert [(d["address"], d["name"], d["source"]) for d in stored] == [
         ("10.0.0.10", "Brána", "scan"),
         ("10.0.0.5", "NAS", "manual"),
-        ("10.0.0.20", "Kamera", "manual"),
+        ("10.0.0.20", "Kamera", "homecraft"),
     ]
+    assert "10.0.0.20" not in network_devices.hosts()  # Homecraft cannot widen ping (#938)
     assert stored[0]["note"] == "půda"
+    assert stored[0]["hostname"] == ""
     assert client._audit_target(req) == "Síť (import z Homecraftu)"
 
 
