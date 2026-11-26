@@ -39,6 +39,7 @@ def test_the_features_with_checked_content_are_all_seen(rendered):
         "go2rtc",
         "heating",
         "homecraft",
+        "lan",
         "internet",
         "nas",
         "notifications",

@@ -90,8 +90,13 @@ NODE_TYPES = frozenset(
         "api-render-template",
         "api-call-service",
         "ha-fire-event",
+        "ha-api",
     }
 )
+# ha-api only writes an entity's state (POST /api/states/<entity_id>, the
+# gateway connectivity sensors of heating, homecraft#928); HA itself refuses
+# a `..` in the path (security_filter).
+HA_API_PATH = "states/"
 # api-call-service as the library writes it: the service fixed in the node,
 # never taken from the message.
 CALL_SERVICE_VERSION = 7
@@ -246,6 +251,13 @@ def _node_refused(node: dict) -> str | None:
         return f"uzel {t}"
     if t == "api-call-service":
         return _call_service_refused(node)
+    if t == "ha-api" and (
+        node.get("protocol") != "http"
+        or node.get("method") != "post"
+        or not str(node.get("path") or "").startswith(HA_API_PATH)
+        or ".." in str(node.get("path"))
+    ):
+        return f"uzel {t} mimo zápis stavu entity"
     if t == "function" and node.get("libs"):
         return f"uzel {t} s moduly (libs)"
     return None

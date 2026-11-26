@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.25.0
+
+- Flow Node-RED smí obsahovat uzel `ha-api`, ale jen pro zápis stavu entity
+  (`POST /api/states/…`). Topení 1.20.0-beta.7+ jím zapisuje stav spojení
+  bran BLU (homecraftcz/homecraft#928); dřív doplněk takový flow odmítl
+  s `refused_content`.
+
 ## 0.24.0
 
 - Se souhlasem **Posílat chybová hlášení Homecraftu** doplněk zapíše

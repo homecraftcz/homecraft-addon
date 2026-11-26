@@ -196,6 +196,12 @@ USER = [
     {"id": "u_sf", "type": "subflow", "in": [{"wires": [{"id": "u_sf_x"}]}]},
     {"id": "u_sf_x", "type": "exec", "z": "u_sf", "command": "ls"},
 ]
+HA_API = {
+    "type": "ha-api",
+    "protocol": "http",
+    "method": "post",
+    "path": "states/{{payload.entity_id}}",
+}
 CALL = {
     "type": "api-call-service",
     "version": 7,
@@ -294,6 +300,11 @@ LIBS = [{"var": "cp", "module": "child_process"}]
         ),
         ({**CALL, "version": 6}, "uzel api-call-service verze 6"),
         ({**CALL, "service_domain": "shell_command"}, "uzel api-call-service verze 7"),
+        ({**HA_API, "method": "get"}, "uzel ha-api mimo zápis stavu entity"),
+        ({**HA_API, "protocol": "websocket"}, "uzel ha-api mimo zápis stavu entity"),
+        ({**HA_API, "path": "services/a/b"}, "uzel ha-api mimo zápis stavu entity"),
+        ({**HA_API, "path": "states/../services/x/y"}, "uzel ha-api mimo zápis stavu entity"),
+        ({**HA_API, "path": "{{payload.path}}"}, "uzel ha-api mimo zápis stavu entity"),
     ],
 )
 def test_nodered_refused(node, refused):
@@ -301,6 +312,7 @@ def test_nodered_refused(node, refused):
 
 
 def test_nodered_library_shaped_call_passes():
+    assert check([{"id": "n", **HA_API}]) is None
     assert check([{"id": "n", **CALL}]) is None
     assert check([{"id": "n", **CALL, "action": None}]) is None  # domain + service only
 

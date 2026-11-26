@@ -355,6 +355,9 @@ program, musí ve stejném PR upravit `apparmor.txt` a ověřit ho na HA OS
   Kontrola se týká typů uzlů, ne jejich kódu.
 - Uzel `http request` (hlídání bran Shelly ve feature Topení) posílá požadavky
   na adresu ze zprávy.
+- Uzel `ha-api` (stav spojení bran ve feature Topení) smí jen zapsat stav
+  entity (`POST /api/states/…`); entitu bere ze zprávy, takže umí přepsat
+  stav kterékoli entity (služby nevolá).
 - Nové uzly mohou na flow uživatele působit nepřímo: přes uzly `catch`
   a `status`, vyvolané události a změny stavů entit.
 - JavaScript v šablonách vlastních karet dashboardu (`[[[ ]]]` v button-card,
