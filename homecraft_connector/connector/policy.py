@@ -353,7 +353,7 @@ FLOW_FIELDS = {
     "systemmonitor": {},
     "scheduler": {},
     "browser_mod": {},
-    "ping": {"host": lambda v: v == "1.1.1.1"},
+    "ping": {"host": _text},  # 1.1.1.1 or a listed LAN device: flow_step_allowed
     "holiday": {"country": _text},
     # no db_url: the recorder's database only
     "sql": {
@@ -449,12 +449,20 @@ def ingress_allowed(slug: str, method: str, subpath: str) -> bool:
     return any(method == m and re.fullmatch(p, subpath) for m, p in INGRESS_ROUTES.get(slug, ()))
 
 
-def flow_step_allowed(handler: str, body: bytes | None) -> bool:
-    """A step body of a FLOW_FIELDS flow: only that handler's fields and values."""
+def flow_step_allowed(
+    handler: str, body: bytes | None, lan_hosts: frozenset[str] = frozenset()
+) -> bool:
+    """A step body of a FLOW_FIELDS flow: only that handler's fields and values.
+    Ping only 1.1.1.1 (observability) or `lan_hosts`, the addresses and names the
+    user listed on the Síť tab (lan, homecraft#938): Homecraft never picks a LAN host."""
     data = _json(body)
     fields = FLOW_FIELDS.get(handler)
     if fields is None or not isinstance(data, dict):
         return False
+    if handler == "ping" and "host" in data:
+        host = data["host"]
+        if not isinstance(host, str) or (host != "1.1.1.1" and host.lower() not in lan_hosts):
+            return False
     return all(k in fields and fields[k](v) for k, v in data.items())
 
 

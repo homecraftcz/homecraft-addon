@@ -12,7 +12,7 @@ import time
 import aiohttp
 from yarl import URL
 
-from . import content, policy, settings
+from . import content, network_devices, policy, settings
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,8 @@ class HttpProxy:
             if handler is None:
                 raise refused
             if method == "POST" and handler != "influxdb":
-                if not policy.flow_step_allowed(handler, body):
+                lan_hosts = network_devices.hosts() if handler == "ping" else frozenset()
+                if not policy.flow_step_allowed(handler, body, lan_hosts):
                     raise refused
             elif method == "POST":
                 host = policy.flow_step_host(body)

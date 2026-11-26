@@ -2,7 +2,7 @@
 
 The same model and checks as Homecraft's project network devices (#463/#467):
 addresses only, never credentials. Added here: `hostname` (an mDNS `*.local`
-name) and `source` (who added it: manual, ha, scan)."""
+name) and `source` (who added it: manual, ha, scan, homecraft = the import)."""
 
 import json
 import re
@@ -12,7 +12,7 @@ from . import settings
 from .files import write_private
 
 KINDS = ("shelly_gateway", "shelly", "camera", "nas", "router", "other")
-SOURCES = ("manual", "ha", "scan")
+SOURCES = ("manual", "ha", "scan", "homecraft")
 MAX_DEVICES = 200
 MAX_URLS = 20
 _MAX_RAW_URLS = 100  # raw input cap, before empty entries are dropped
@@ -140,6 +140,18 @@ def load() -> list[dict]:
         return []
 
 
+def hosts() -> frozenset[str]:
+    """The stored addresses and `.local` names, lowercase: the only LAN hosts
+    Homecraft may ping (homecraft#938). Not its own imports until the user saves them."""
+    return frozenset(
+        h.lower()
+        for d in load()
+        if d["source"] != "homecraft"
+        for h in (d["address"], d["hostname"])
+        if h
+    )
+
+
 def save(devices: object) -> list[dict]:
     """Validate and replace the whole list; returns what was stored."""
     stored = validate(devices)
@@ -151,14 +163,15 @@ def import_devices(devices: object) -> dict:
     """Merge Homecraft's old project list into the stored one (#635), by address or MAC.
 
     Stored entries win; only their empty fields are filled. New ones get source
-    "manual". Invalid entries are dropped. Idempotent. Returns the counts."""
+    "homecraft" (not pingable, see hosts). Invalid entries are dropped. Idempotent.
+    Returns the counts."""
     if not isinstance(devices, list):
         raise TypeError("devices")
     stored = load()
     counts = {"added": 0, "updated": 0, "unchanged": 0, "invalid": 0, "over_limit": 0}
     for raw in devices:
         try:
-            new = _device({**raw, "source": "manual"} if isinstance(raw, dict) else raw)
+            new = _device({**raw, "source": "homecraft"} if isinstance(raw, dict) else raw)
         except ValueError:
             counts["invalid"] += 1
             continue
@@ -178,7 +191,8 @@ def import_devices(devices: object) -> dict:
             stored.append(new)
             counts["added"] += 1
             continue
-        missing = {k: v for k, v in new.items() if v and not match.get(k)}
+        # Never a hostname: hosts() would trust a name Homecraft chose (#938).
+        missing = {k: v for k, v in new.items() if v and not match.get(k) and k != "hostname"}
         match.update(missing)
         counts["updated" if missing else "unchanged"] += 1
     if counts["added"] or counts["updated"]:

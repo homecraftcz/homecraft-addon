@@ -40,6 +40,7 @@ def test_the_features_with_checked_content_are_all_seen(rendered):
         "heating",
         "homecraft",
         "internet",
+        "lan",
         "nas",
         "notifications",
         "observability",
@@ -124,7 +125,12 @@ def test_integration_steps_pass():
     assert {d for d, _ in entries} == {"sql", "speedtestdotnet", "ping", "holiday", "systemmonitor"}
     for domain, entry in entries:
         for step in entry["steps"]:
-            assert policy.flow_step_allowed(domain, json.dumps(step).encode()), (domain, step)
+            # lan: the user's own LAN device (homecraft#938), listed on the Síť tab
+            hosts = frozenset({"{{ host }}"})
+            assert policy.flow_step_allowed(domain, json.dumps(step).encode(), hosts), (
+                domain,
+                step,
+            )
 
 
 def test_hacs_requires_pinned():
