@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import re
+import secrets
 import socket
 import time
 import uuid
@@ -68,6 +69,8 @@ UPDATE_FIELDS = {
     "message": 500,
 }
 UPDATE_STATES = ("available", "running", "failed", "done")
+# ask() (#49): Homecraft's handler may run Plan + Apply, which can take a while.
+ASK_TIMEOUT = 120.0
 
 
 # How a connection attempt ended; picks the reconnect delay.
@@ -115,6 +118,17 @@ def access_refused(e: aiohttp.WSServerHandshakeError) -> bool:
     """Cloudflare Access without a valid token: 401/403, or a redirect to its
     login page (aiohttp's ws_connect follows redirects, so that ends in 200 HTML)."""
     return bool(e.history) or e.status in (200, 401, 403) or 300 <= e.status < 400
+
+
+class AskError(Exception):
+    """ask() failed: `code` is offline, paused, unsupported (no reply in time: an
+    older Homecraft drops requests it does not know), or Homecraft's error code
+    (homecraftcz/homecraft#944: too_large, unknown_op, busy, not_paired,
+    internal, or the handler's own) with its `message`."""
+
+    def __init__(self, code: str, message: str = "") -> None:
+        super().__init__(code)
+        self.code, self.message = code, message
 
 
 class Client:
@@ -371,6 +385,36 @@ class Client:
         # says what it made of it, a refusal included.
         offered.update(state="running", message="")
 
+    async def ask(self, op: str, payload: dict, timeout: float = ASK_TIMEOUT) -> object:
+        """Our own request to Homecraft (homecraftcz/homecraft#944): sends
+        `{"op", "rid", ...payload}` and waits for `{"op": "reply", "rid", "ok",
+        "result" | "error"}`. Returns the result; AskError otherwise."""
+        conn = self._conn
+        if conn is None or not self.connected:
+            raise AskError("offline")
+        if self.paused:
+            raise AskError("paused")
+        rid = secrets.token_hex(8)
+        reply = asyncio.get_running_loop().create_future()
+        conn.pending[rid] = reply
+        try:
+            await conn.send({**payload, "op": op, "rid": rid})
+            answer = await asyncio.wait_for(reply, timeout)
+        except TimeoutError:
+            raise AskError("unsupported") from None
+        except (ConnectionError, RuntimeError, aiohttp.ClientError):
+            raise AskError("offline") from None
+        finally:
+            conn.pending.pop(rid, None)
+        if answer.get("ok") is True:
+            return answer.get("result")
+        error = answer.get("error") if isinstance(answer.get("error"), dict) else {}
+        code, message = error.get("code"), error.get("message")
+        raise AskError(
+            code[:64] if isinstance(code, str) and code else "internal",
+            message[:500] if isinstance(message, str) else "",
+        )
+
     async def report_errors(self, reports: list[dict]) -> int:
         """`errors.report` (no `id`, no reply), at most errors.MAX_REPORTS per
         frame; returns how many went out. Offline, paused or without consent the
@@ -484,6 +528,11 @@ class Client:
                     )
                     if accept is None:
                         accept = loop.call_later(HELLO_ACCEPTED_AFTER, self._accepted)
+                elif data.get("op") == "reply":  # to our own ask()
+                    rid = data.get("rid")
+                    fut = conn.pending.get(rid) if isinstance(rid, str) else None
+                    if fut is not None and not fut.done():
+                        fut.set_result(data)
                 elif "id" in data:
                     self._accepted()  # requests come only after an accepted hello
                     if data.get("op") in ("ws.send", "ws.close", "access_token.set"):
@@ -500,6 +549,9 @@ class Client:
             if deadline is not None:
                 deadline.cancel()
             self._conn = None
+            for fut in conn.pending.values():  # ask()s whose reply will never come
+                if not fut.done():
+                    fut.set_exception(AskError("offline"))
             self.updates = []  # stale once disconnected; resent after the next connect
             for task in list(tasks):
                 task.cancel()
@@ -571,6 +623,8 @@ class _Conn:
     # A message of our own to Homecraft (update.run, errors.report).
     send: Callable[[dict], Awaitable[None]]
     ops: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(MAX_CONCURRENT_OPS))
+    # ask() (#49): rid -> the future its reply resolves
+    pending: dict[str, asyncio.Future] = field(default_factory=dict)
 
 
 FILE_OPS = {

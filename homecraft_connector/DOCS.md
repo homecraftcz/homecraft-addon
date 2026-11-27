@@ -117,7 +117,23 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   entity ani služby panel nevolá. Když helper v HA chybí, panel to řekne
   a nic neuloží (technik ho doplní Apply). Každá změna je v **Co Homecraft
   dělal** (`panel.helper`, okruh a klíč, bez hodnoty).
-  **Co dělá technik**: hlavice, okna a čidla, místnosti, názvy, kotel
+  **Názvy a okna přes Homecraft**: majitel přejmenuje okruh (tužka u názvu),
+  hlavici (tužka v řádku hlavice; místnost jen čte) a okno, a u okna
+  zaškrtne čipy **Zavře:**, které hlavice zavírá. Změny se sbírají v liště
+  **Neuložené změny** (**Uložit** / **Zahodit**); **Uložit** je pošle do
+  Homecraftu (`heating.save`, homecraftcz/homecraft#946) a ten okruh uloží
+  a hned nasadí, bez technika („Nasazuji…“, pak „Uloženo a nasazeno“; nové
+  názvy panel ukáže po dalším souhrnu od Homecraftu). Název se přepíše
+  v celém HA. Homecraft uložení odmítne, když má technik v topení
+  rozpracované změny nebo se HA od posledního nasazení změnil; hlášku
+  Homecraftu panel ukáže, jak je, a nic se neuloží napůl. Offline nebo
+  pozastavený Homecraft: **Uložit** je zakázané s vysvětlením. Doplněk
+  pustí jen `POST /api/heating/save` s názvy a hlavicemi okruhu, který
+  Homecraft nahlásil (hlavice a okna toho okruhu, názvy do 100 znaků),
+  žádnou jinou operaci; v auditu je `heating.save` (okruh, bez názvů). Bez
+  odpovědi do 2 minut (starší Homecraft) panel napíše, ať se majitel za
+  chvíli podívá, jestli se změna projevila.
+  **Co dělá technik**: hlavice, okna a čidla, místnosti, kotel
   a rozvrhy (rozvrhy, programy a teploty mění majitel na kartě topení v HA).
   Stav se čte živě z HA, když je záložka otevřená (každých 30 s).
 - **Vzdálený přístup**: zatím „Připravujeme“.

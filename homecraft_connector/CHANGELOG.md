@@ -45,6 +45,17 @@
   smí měnit jen těchto pět helperů okruhů, které Homecraft nahlásil,
   s kontrolou rozsahu a kroku, a jen když helper v HA existuje; každá změna
   je v auditu jako `panel.helper` (okruh a klíč, bez hodnoty).
+- Majitel v **Topení** přejmenuje okruh, hlavice a okna a čipy **Zavře:**
+  určí, které hlavice okno zavře (homecraftcz/homecraft-addon#49). Změny
+  ukáže lišta **Neuložené změny** s **Uložit** / **Zahodit**; uložení jde přes
+  Homecraft (`heating.save`, homecraftcz/homecraft#946), který okruh uloží
+  a nasadí bez technika („Nasazuji…“ → „Uloženo a nasazeno“, jinak česká
+  hláška Homecraftu). Offline nebo při pauze je **Uložit** zakázané. Nový
+  `POST /api/heating/save` pustí jen názvy a hlavice nahlášeného okruhu;
+  v auditu jako `heating.save`.
+- Doplněk umí poslat Homecraftu vlastní požadavek a počkat na odpověď
+  (`{op, rid}` → `{op: "reply", rid, ok, …}`, homecraftcz/homecraft#944;
+  limit 2 minuty; při pauze se nepošle, odpojení čekání hned ukončí).
 - Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
   z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
   nastavení Tailscale, `last_change`, `technician`,

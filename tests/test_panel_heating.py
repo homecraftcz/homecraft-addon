@@ -11,6 +11,7 @@ from aiohttp import web
 from test_house import CIRCUITS, REGISTRY, STATES, _by_id, _state
 
 from connector import audit, features, house, panel, settings
+from connector.client import AskError
 
 C1 = "heating_circuit_1"
 CIRCUITS_1 = [
@@ -313,3 +314,151 @@ def test_heating_detail_endpoint(run_panel, monkeypatch):
     d, missing = run_panel(_scenario(monkeypatch, [], [detail, unknown]))
     assert d["helpers"]["auto_rule"] == "time" and d["valves"][0]["phase"] == "fast"
     assert missing == 404
+
+
+def test_detail_has_what_the_panel_edits():
+    """#49: the reported names (not HA's fallbacks), window keys and valve IDs."""
+    circuit = {
+        **CIRCUITS_1[0],
+        "heading": "Dole",
+        "valves": [{"entity_id": "climate.bathroom_valve", "name": ""}, {"entity_id": ["x"]}],
+    }
+    d = house.detail(circuit, _by_id(DETAIL_STATES), {})
+    assert (d["title"], d["heading"]) == ("Přízemí", "Dole")
+    [v] = d["valves"]
+    assert (v["name"], v["own_name"]) == ("climate.bathroom_valve", "")
+    assert [(w["key"], w["own_name"], w["valve_ids"]) for w in d["windows"]] == [
+        ("w1", "Okno", []),
+        ("w2", "Dveře", ["climate.bathroom_valve", "climate.gone"]),
+    ]
+
+
+# --- heating.save (#49)
+
+
+def _save_scenario(monkeypatch, agent, bodies, ask=None, nonce=True):
+    """POST each body to /api/heating/save with CIRCUITS_1 reported; `ask`
+    replaces Client.ask (None: the real one, the agent is not connected)."""
+    features.save({"features": [{"name": "Topení", "id": "heating", "circuits": CIRCUITS_1}]})
+    if ask is not None:
+        monkeypatch.setattr(agent, "ask", ask)
+    headers = {"X-Homecraft-Panel": panel.NONCE} if nonce else {}
+
+    async def scenario(http):
+        out = []
+        for body in bodies:
+            r = await http.post("/api/heating/save", json=body, headers=headers)
+            text = await r.text()
+            out.append(
+                (r.status, json.loads(text) if r.content_type == "application/json" else text)
+            )
+        return out
+
+    return scenario
+
+
+def test_save_sends_heating_save(run_panel, agent, monkeypatch):
+    asked = []
+
+    async def ask(op, payload):
+        asked.append((op, payload))
+        return {"status": "success"}
+
+    body = {
+        "instance": C1,
+        "title": " Přízemí ",
+        "valve_names": {"climate.bathroom_valve": "Koupelna dole"},
+        "windows": {
+            "w1": {"name": "Okno", "valves": ["climate.bathroom_valve"] * 2},
+            "w2": {"valves": []},
+        },
+    }
+    [(status, reply)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask))
+    assert (status, reply) == (200, {"ok": True, "status": "success"})
+    assert asked == [
+        (
+            "heating.save",
+            {
+                **body,
+                "title": "Přízemí",
+                "windows": {
+                    "w1": {"name": "Okno", "valves": ["climate.bathroom_valve"]},
+                    "w2": {"valves": []},
+                },
+            },
+        )
+    ]
+    audit.flush()
+    [entry] = audit.recent()
+    assert (entry["op"], entry["target"], entry["ok"]) == ("heating.save", C1, True)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"instance": C1},  # nothing to save
+        {"instance": "heating_circuit_9", "title": "X"},
+        {"instance": C1, "title": "X", "parameters": {}},
+        {"instance": C1, "title": "x" * 101},
+        {"instance": C1, "heading": 5},
+        {"instance": C1, "valve_names": {"climate.other": "X"}},
+        {"instance": C1, "valve_names": ["climate.bathroom_valve"]},
+        {"instance": C1, "valve_names": {"climate.bathroom_valve": None}},
+        {"instance": C1, "windows": {"w9": {"name": "X"}}},
+        {"instance": C1, "windows": {"w1": {}}},
+        {"instance": C1, "windows": {"w1": {"name": "X", "sensors": []}}},
+        {"instance": C1, "windows": {"w1": {"valves": ["climate.gone"]}}},
+        {"instance": C1, "windows": {"w1": {"valves": "climate.bathroom_valve"}}},
+        ["not", "an", "object"],
+    ],
+)
+def test_save_refuses_bodies(run_panel, agent, monkeypatch, body):
+    asked = []
+
+    async def ask(op, payload):
+        asked.append(payload)
+
+    [(status, reply)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask))
+    assert status == 400 and reply["ok"] is False
+    assert asked == [] and audit.recent() == []
+
+
+def test_save_offline_is_409(run_panel, agent, monkeypatch):
+    body = {"instance": C1, "title": "X"}
+    [(status, reply)] = run_panel(_save_scenario(monkeypatch, agent, [body]))
+    assert status == 409 and reply["code"] == "offline"
+    assert "není připojený" in reply["error"]
+    assert audit.recent()[0]["code"] == "offline"
+
+
+@pytest.mark.parametrize(
+    ("code", "message", "status", "shown"),
+    [
+        ("blocked", "Technik má v topení rozpracované změny.", 409, "Technik má v topení"),
+        ("blocked", "", 409, "Technik musí nejdřív vyřešit změny v Home Assistantu."),
+        ("failed", "Změny jsou uložené, ale nasazení se nepovedlo.", 502, "nepovedlo"),
+        ("invalid", "Hlavice x v okruhu není", 400, "Hlavice x v okruhu není"),
+        ("busy", "Too many requests in flight", 409, "už probíhá"),
+        ("unknown_op", "Unknown operation", 502, "neumí"),
+        ("unsupported", "", 502, "neodpověděl do 2 minut"),
+        ("internal", "Internal error", 502, "(internal)"),
+    ],
+)
+def test_save_errors(run_panel, agent, monkeypatch, code, message, status, shown):
+    async def ask(op, payload):
+        raise AskError(code, message)
+
+    body = {"instance": C1, "title": "X"}
+    [(got, reply)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask))
+    assert got == status and shown in reply["error"] and reply["code"] == code
+
+
+def test_save_needs_the_nonce(run_panel, agent, monkeypatch):
+    asked = []
+
+    async def ask(op, payload):
+        asked.append(payload)
+
+    body = {"instance": C1, "title": "X"}
+    [(status, _)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask, nonce=False))
+    assert status == 403 and asked == []
