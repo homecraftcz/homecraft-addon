@@ -1,7 +1,7 @@
-"""The add-on panel behind HA ingress (#556): state, verification and pairing code, Access token,
-pause, consent to error reports (#31) with HA's system_log (homecraftcz/homecraft#906),
-the audit, the network devices (#631) with their LAN scan (#633) and the features
-Homecraft installed (homecraftcz/homecraft#636).
+"""The add-on panel behind HA ingress (#556): the house name (HA's location_name),
+state, verification and pairing code, Access token, pause, consent to error reports (#31)
+with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices (#631)
+with their LAN scan (#633) and the features Homecraft installed (homecraftcz/homecraft#636).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -27,12 +27,14 @@ from . import (
     access_token,
     audit,
     features,
+    fingerprint,
     ha_token,
     http_proxy,
     network_devices,
     network_discovery,
     network_scan,
     policy,
+    selfcheck,
     settings,
     state,
     system_log,
@@ -89,10 +91,33 @@ async def _page(request: web.Request) -> web.Response:
     return web.Response(text=PAGE, content_type="text/html")
 
 
+# The panel header's house name (HA's location_name): looked up again at most
+# every HA_NAME_TTL seconds, so a rename shows without an add-on restart.
+HA_NAME_TTL = 600.0
+HA_NAME_RETRY = 60.0  # after a failed lookup
+_house_cache: dict = {"value": None, "at": None}
+
+
+async def _house_name() -> str | None:
+    """HA down or slow: the last known name (None at first), the status never waits long."""
+    now = time.monotonic()
+    if _house_cache["at"] is None or now - _house_cache["at"] > HA_NAME_TTL:
+        _house_cache["at"] = now
+        try:
+            async with aiohttp.ClientSession(timeout=selfcheck.TIMEOUT) as http:
+                name = await asyncio.wait_for(fingerprint._ha_name(http), 2)
+            _house_cache["value"] = name or _house_cache["value"]
+        except Exception as e:
+            _house_cache["at"] = now - HA_NAME_TTL + HA_NAME_RETRY
+            logger.debug("Název domu zatím nezjištěn: %s", type(e).__name__)
+    return _house_cache["value"]
+
+
 async def _status(request: web.Request) -> web.Response:
     client = request.app[CLIENT]
     return web.json_response(
         {
+            "ha_name": await _house_name(),
             "connected": client.connected,
             "server_url": client.server_url,
             "version": client.version,

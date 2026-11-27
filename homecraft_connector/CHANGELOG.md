@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.27.0
+
+- Nový vzhled panelu pro majitele domu ve stylu Homecraft (světlý i tmavý,
+  použitelný i na telefonu, homecraftcz/homecraft-addon#45). V hlavičce je
+  název domu (název Home Assistantu) a stav spojení.
+- Pět záložek: **Domů**, **Topení**, **Vzdálený přístup**, **Zařízení v síti**
+  a **Homecraft a bezpečnost**. Topení a Vzdálený přístup zatím ukazují
+  „Připravujeme“. Staré odkazy (`#overview`, `#features`, `#network`, `#audit`)
+  vedou na nové záložky.
+- **Domů**: dlaždice, banner při odpojení, **Co máte od Homecraftu** (dřív
+  záložka Features), pauza a aktualizace karet, když nějaká čeká.
+- **Homecraft a bezpečnost**: spárování, **Co Homecraft dělal** (audit česky,
+  filtr Vše / Odmítnuté), spojení, pauza a **Posílat chyby technikovi**. Tokeny,
+  server, párovací kód a verze doplňku jsou ve sbalené sekci **Pro technika**.
+- Funkce panelu se nemění.
+
 ## 0.25.0
 
 - Integraci Ping smí Homecraft (feature Domácí síť, homecraftcz/homecraft#938)

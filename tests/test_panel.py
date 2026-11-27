@@ -40,8 +40,14 @@ def test_page_and_status(run_panel):
     assert status["connected"] is False and status["paused"] is False
     assert status["token_set"] is False
     assert status["audit_24h"] == {"count": 0, "refused": 0, "capped": False}
-    for tab in ("overview", "features", "network", "security", "audit"):
+    assert status["ha_name"] == "Dům Test"
+    for tab in ("home", "heating", "remote", "devices", "security"):
         assert f'href="#{tab}"' in html and f'data-tab="{tab}"' in html
+    # v1 links land on the new tabs
+    assert (
+        'OLD_TABS = { overview: "home", features: "home", network: "devices", audit: "security" }'
+        in html
+    )
 
 
 def test_state_changes_need_the_csrf_header(run_panel, agent):
@@ -145,13 +151,14 @@ def test_updates_list_and_run(run_panel, agent, monkeypatch):
     assert calls == [("card", "x")] * 5
 
 
-def test_page_has_the_updates_section(run_panel):
+def test_page_has_the_updates_section_at_home(run_panel):
     async def scenario(http):
         return await (await http.get("/")).text()
 
     html = run_panel(scenario)
-    assert 'id="updates"' in html and "<h2>Aktualizace</h2>" in html
-    assert html.index('id="updates"') < html.index("<h2>Spojení</h2>")
+    assert 'id="updates"' in html and ">Aktualizace</h2>" in html
+    home, heating = html.index('data-tab="home"'), html.index('data-tab="heating"')
+    assert home < html.index('id="updates"') < heating
 
 
 def test_page_carries_the_nonce(run_panel):
@@ -198,7 +205,7 @@ def test_error_reports_switch(run_panel, agent, monkeypatch):
 
     fresh, page, no_csrf, bad, on, body, after_on, off = run_panel(scenario)
     assert fresh["error_reports"] is False and fresh["system_log"] == {"state": "off"}
-    assert "Posílat chybová hlášení Homecraftu" in page and 'id="systemLogRestart"' in page
+    assert "Posílat chyby technikovi" in page and 'id="systemLogRestart"' in page
     assert (no_csrf, bad, on) == (403, 400, 200)
     assert body == {
         "ok": True,
@@ -241,3 +248,25 @@ def test_system_log_restart_refused_by_check_config(run_panel, monkeypatch):
         f"{panel.RESTART_ERRORS['ha_config_invalid']}: Invalid config for 'light'"
     )
     assert not panel._RESTART_LOCK.locked()
+
+
+def test_ha_name_is_cached_and_survives_a_failed_lookup(run_panel, monkeypatch):
+    calls = []
+
+    async def ha_name(http):
+        calls.append(1)
+        if len(calls) > 1:
+            raise OSError("HA down")
+        return "Dům Malinovi"
+
+    monkeypatch.setattr(panel.fingerprint, "_ha_name", ha_name)
+
+    async def scenario(http):
+        first = (await (await http.get("/api/status")).json())["ha_name"]
+        second = (await (await http.get("/api/status")).json())["ha_name"]
+        panel._house_cache["at"] -= panel.HA_NAME_TTL + 1  # expired: looked up again, HA down
+        third = (await (await http.get("/api/status")).json())["ha_name"]
+        return first, second, third
+
+    assert run_panel(scenario) == ("Dům Malinovi",) * 3
+    assert len(calls) == 2

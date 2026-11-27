@@ -3,218 +3,302 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homecraft Connector</title>
+<title>Homecraft</title>
 <style>
+/* Homecraft style (homecraft docs/style-homecraft.md): the --hfb-* tokens with
+   the Homecraft palette; system fonts only (the CSP allows nothing external). */
 :root {
   color-scheme: light dark;
-  --bg: #f6f7f9; --card: #fff; --text: #1c1f24; --muted: #687080; --line: #e3e6eb;
-  --accent: #2f6fed; --ok: #1e8e4e; --warn: #c27c0e; --bad: #c8372d;
+  --hfb-page: #EEF0F3; --hfb-card: #fff; --hfb-border: #DFE3E8; --hfb-fill: #F0F2F5;
+  --hfb-text: #1C2128; --hfb-text-2: #5F6773; --hfb-accent: #4F6B8C; --hfb-blue-grey: #607D8B;
+  --hfb-card-radius: 20px; --hfb-card-shadow: 0 1px 4px rgba(0,0,0,.06);
+  --hfb-btn-raised-bg: var(--hfb-card); --hfb-btn-raised-shadow: 0 1px 3px rgba(0,0,0,.1);
+  --hfb-btn-primary-bg: var(--hfb-text); --hfb-btn-primary-color: var(--hfb-card);
+  --hfb-tile-radius: 14px; --hfb-off: #C9CFD7;
+  --hfb-heat-dot: linear-gradient(145deg,#FFA66E,#E8592C);
+  --hfb-run-dot: linear-gradient(145deg,#8FA7C4,#4F6B8C);
+  --hfb-ok-dot: linear-gradient(145deg,#5FC98A,#1E7A46);
+  --ok: #1E7A46; --ok-tint: #E3F4EA; --info: #0B4F9C; --info-tint: #E5F1FF;
+  --warn: #8A5608; --warn-tint: #FDF1DC; --bad: #B42318; --bad-tint: #FDECEC; --badge: #E5484D;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111317; --card: #1b1e24; --text: #e8eaee; --muted: #9aa2b1; --line: #2c313a;
-    --accent: #6a9bff; --ok: #4cc27f; --warn: #e8a93a; --bad: #f06b61;
+    --hfb-page: #0B0D10; --hfb-card: #181C22; --hfb-border: #262C35; --hfb-fill: #21262E;
+    --hfb-text: #E9EDF2; --hfb-text-2: #9AA2AE; --hfb-accent: #86A9D1; --hfb-blue-grey: #90A4AE;
+    --hfb-off: #3A424D;
+    --ok: #5FD08F; --ok-tint: #16301F; --info: #8FC3FF; --info-tint: #0F2740;
+    --warn: #F2C36B; --warn-tint: #33270F; --bad: #FF8A80; --bad-tint: #3A1A1A;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
-h1 { font-size: 22px; margin: 4px 0 0; }
-h2 { font-size: 16px; margin: 0 0 10px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.muted { color: var(--muted); }
-.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 13px; }
-.on { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-.off { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
-.paused { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0; }
-dt { color: var(--muted); }
-dd { margin: 0; overflow-wrap: anywhere; }
-button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
-  color: var(--text); padding: 6px 14px; cursor: pointer; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { color: var(--bad); }
-input, select, textarea { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--text); min-width: 0; }
-input[type=password] { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--text); flex: 1 1 260px; min-width: 0; }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
-  overflow-wrap: anywhere; display: inline-block; max-width: 100%; }
-.switch { display: flex; gap: 10px; align-items: center; font-weight: 600; cursor: pointer; }
-.switch input { width: 20px; height: 20px; accent-color: var(--warn); }
+body { margin: 0; background: var(--hfb-page); color: var(--hfb-text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1080px; margin: 0 auto; padding: 24px 24px 40px; display: grid; gap: 16px; }
+main > *, .stack > *, .grid > * { min-width: 0; }  /* wide tables scroll inside .scroll, not the page */
+a { color: var(--hfb-accent); }
+h1 { margin: 0; font-size: 20px; font-weight: 600; }
+h2 { margin: 0; }
+.muted { color: var(--hfb-text-2); }
+.stack { display: grid; gap: 16px; align-content: start; }
+.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.top .grow { flex: 1; min-width: 0; }
+.top .sub { font-size: 12px; color: var(--hfb-text-2); }
+.top .short { display: none; }
+.logo { width: 40px; height: 40px; border-radius: 12px; background: var(--hfb-run-dot); color: #fff;
+  display: flex; align-items: center; justify-content: center; flex: none; }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 12px; border-radius: 14px;
+  font-size: 12px; font-weight: 600; background: var(--hfb-fill); color: var(--hfb-text-2); }
+.pill.dotted::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.ok { background: var(--ok-tint); color: var(--ok); }
+.pill.info { background: var(--info-tint); color: var(--info); }
+.pill.warn { background: var(--warn-tint); color: var(--warn); }
+.pill.bad { background: var(--bad-tint); color: var(--bad); }
+.nav { display: flex; gap: 4px; padding: 4px; background: var(--hfb-card); border: 1px solid var(--hfb-border);
+  border-radius: 14px; overflow-x: auto; }
+.nav a { min-height: 40px; padding: 0 14px; border-radius: 10px; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500; color: var(--hfb-text-2); text-decoration: none; white-space: nowrap; }
+.nav a[aria-current="page"] { background: var(--hfb-fill); color: var(--hfb-text); font-weight: 600; }
+.nav .n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--badge); color: #fff;
+  font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.card { background: var(--hfb-card); border: 1px solid var(--hfb-border); border-radius: var(--hfb-card-radius);
+  box-shadow: var(--hfb-card-shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hd .grow { flex: 1 1 120px; min-width: 0; }
+.t { font-size: 16px; font-weight: 500; }
+.s, .help { font-size: 12px; color: var(--hfb-text-2); margin: 0; }
+.dot { width: 36px; height: 36px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--hfb-fill); color: var(--hfb-blue-grey); }
+.dot.heat { background: var(--hfb-heat-dot); color: #fff; }
+.dot.run { background: var(--hfb-run-dot); color: #fff; }
+.dot.okd { background: var(--hfb-ok-dot); color: #fff; }
+.grid { display: grid; gap: 16px; }
+.tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+.home { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+.ft { text-decoration: none; color: inherit; gap: 10px; }
+a.ft:hover { border-color: var(--hfb-off); }
+.ft .big { font-size: 22px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ft .meta { font-size: 12px; color: var(--hfb-text-2); overflow-wrap: anywhere; }
+.ft .foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.tile { background: var(--hfb-fill); border-radius: var(--hfb-tile-radius); padding: 10px 12px; min-width: 0; }
+.tile .l { font-size: 11px; color: var(--hfb-text-2); }
+.tile .v { font-size: 14px; font-weight: 700; margin-top: 2px; overflow-wrap: anywhere; }
+.tile .c { font-size: 12px; color: var(--hfb-text-2); margin-top: 2px; overflow-wrap: anywhere; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rows { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--hfb-fill);
+  border-radius: var(--hfb-tile-radius); padding: 10px 10px 10px 14px; min-width: 0; }
+.row > .grow { flex: 1 1 200px; min-width: 0; }
+.row .n { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.row .m { font-size: 12px; color: var(--hfb-text-2); overflow-wrap: anywhere; }
+.row .m.err { color: var(--bad); }
+.adv .row { background: var(--hfb-card); }
+.field { display: flex; align-items: flex-start; gap: 10px; background: var(--hfb-fill); border-radius: var(--hfb-tile-radius);
+  padding: 10px 10px 10px 12px; }
+.field .fl { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.field .lbl { font-size: 14px; font-weight: 600; }
+button, .sb { font: inherit; font-size: 13px; font-weight: 600; min-height: 32px; border: 0; border-radius: 10px; padding: 0 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; text-decoration: none;
+  background: var(--hfb-btn-raised-bg); color: var(--hfb-text); box-shadow: var(--hfb-btn-raised-shadow); }
+button.sf, .sb.sf { background: var(--hfb-fill); box-shadow: none; }
+.field button.sf { background: var(--hfb-card); }
+button.primary { background: var(--hfb-btn-primary-bg); color: var(--hfb-btn-primary-color); box-shadow: none; }
+button.danger { background: var(--bad-tint); color: var(--bad); box-shadow: none; }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--hfb-accent); outline-offset: 2px; }
+input, select, textarea { font: inherit; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--hfb-border);
+  background: var(--hfb-card); color: var(--hfb-text); min-width: 0; }
+input[type=password] { flex: 1 1 220px; }
+input.sw { appearance: none; -webkit-appearance: none; width: 40px; height: 24px; border: 0; border-radius: 12px; padding: 0;
+  background: var(--hfb-off); position: relative; flex: none; margin: 0; cursor: pointer; }
+input.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s; }
+input.sw:checked { background: var(--hfb-accent); }
+input.sw:checked::after { left: 19px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--hfb-fill);
+  border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere; }
+.row code { background: var(--hfb-card); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .msg { min-height: 1.2em; font-size: 13px; }
+.msg:empty { display: none; }
 .msg.err { color: var(--bad); }
+.alert { display: flex; align-items: flex-start; gap: 10px; border-radius: 12px; padding: 10px 14px; font-size: 13px; }
+.alert svg { flex: none; margin-top: 1px; }
+.alert.warn { background: var(--warn-tint); color: var(--warn); }
+.verification { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 3px; overflow-wrap: anywhere; }
+.center { align-items: center; text-align: center; }
+.chip { min-height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12px; background: var(--hfb-card); color: var(--hfb-text-2);
+  box-shadow: inset 0 0 0 1px var(--hfb-border); }
+.chip[aria-pressed="true"] { background: var(--hfb-text); color: var(--hfb-card); box-shadow: none; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tbl { display: flex; flex-direction: column; }
+.tr { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 4px;
+  border-top: 1px solid var(--hfb-border); align-items: center; font-size: 13px; }
+.tr:first-child { border-top: 0; }
+.tr .when { color: var(--hfb-text-2); font-variant-numeric: tabular-nums; font-size: 12px; }
+.tr .what { overflow-wrap: anywhere; }
+.tr .what .mono { color: var(--hfb-text-2); font-size: 11.5px; }
+details.adv { background: var(--hfb-fill); border-radius: var(--hfb-tile-radius); padding: 0 14px; }
+details.adv > summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; }
+details.adv > summary::-webkit-details-marker { display: none; }
+details.adv > summary::after { content: "▾"; margin-left: auto; color: var(--hfb-text-2); }
+details.adv[open] { padding-bottom: 14px; }
+details.more > summary { cursor: pointer; font-size: 12px; color: var(--hfb-accent); }
+details.more p { font-size: 12px; color: var(--hfb-text-2); }
 .scroll { overflow: auto; max-height: 480px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-thead th { position: sticky; top: 0; background: var(--card); }
-th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-td.target { white-space: normal; overflow-wrap: anywhere; font-family: ui-monospace, Menlo, monospace; }
+thead th { position: sticky; top: 0; background: var(--hfb-card); color: var(--hfb-text-2); font-weight: 600; font-size: 12px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--hfb-border); white-space: nowrap; vertical-align: top; }
 td.wrap { white-space: normal; overflow-wrap: anywhere; }
-td.ok { color: var(--ok); } td.bad { color: var(--bad); } td.warn { color: var(--warn); }
-.verification { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 2px; }
-.stack { display: grid; gap: 16px; }
-main > *, .stack > * { min-width: 0; }  /* wide tables scroll inside .scroll, not the page */
-.tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
-.tabs a { padding: 10px 14px; border-radius: 8px; color: var(--muted); text-decoration: none;
-  font-weight: 600; white-space: nowrap; }
-.tabs a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-.tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.tile { display: flex; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; min-height: 130px; }
-a.tile:hover { border-color: var(--accent); }
-.tile-k { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; }
-.tile-big { font-size: 28px; font-weight: 700; line-height: 1.15; }
-.tile-text { font-size: 20px; }
-.tile p { margin: 0; font-size: 13px; }
-@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tiles > section.tile { grid-column: span 2; } .tile-big { font-size: 22px; } }
-.chip { border-radius: 999px; padding: 4px 12px; font-size: 13px; }
-.chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
-.warnb { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
-.grayb { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--text); }
+td button { white-space: nowrap; }
+td.ok { color: var(--ok); }
 td.name { min-width: 180px; }
-.infob { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-.form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+.form label { display: grid; gap: 4px; font-size: 12px; color: var(--hfb-text-2); }
 .form .full { grid-column: 1 / -1; }
-dialog { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 20px;
-  border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--text); }
-dialog[open] { display: flex; flex-direction: column; gap: 12px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+dialog { width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 18px 20px;
+  border: 1px solid var(--hfb-border); border-radius: 24px; background: var(--hfb-card); color: var(--hfb-text); }
+dialog[open] { display: flex; flex-direction: column; gap: 14px; }
 dialog > * { min-width: 0; }
-dialog::backdrop { background: rgba(17, 19, 23, .45); }
-dialog .scroll { flex: 1 1 auto; max-height: none; border: 1px solid var(--line); border-radius: 10px; }
-dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+dialog::backdrop { background: rgba(11, 13, 16, .45); }
+dialog .scroll { flex: 1 1 auto; max-height: none; border: 1px solid var(--hfb-border); border-radius: 12px; }
+dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb-accent); }
 .profiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-.prof { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--bg); }
+.prof { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--hfb-tile-radius); background: var(--hfb-fill); }
 .prof input { flex: none; margin-top: 2px; }
-.prof .muted { font-size: 13px; }
-#featTiles { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
-.feat { display: flex; flex-direction: column; gap: 10px; }
-.feat h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
-.feat dl { margin: 0; font-size: 13px; gap: 4px 14px; }
-.feat .err { color: var(--bad); font-size: 13px; }
-a.feat-link { align-items: center; justify-content: center; text-align: center; border-style: dashed;
-  color: inherit; text-decoration: none; min-height: 130px; gap: 6px; }
-a.feat-link:hover { border-color: var(--accent); }
+.prof .muted { font-size: 12px; }
+@media (max-width: 760px) {
+  main { padding: 16px 16px 32px; gap: 14px; }
+  .split, .home { grid-template-columns: minmax(0, 1fr); }
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  /* Phone: icons only, the current tab keeps its label (visually hidden ones stay for screen readers). */
+  .nav a:not([aria-current="page"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .nav a { padding: 0 12px; flex: none; }
+  .nav a[aria-current="page"] { flex: 1 1 auto; min-width: 0; }
+  .nav a[aria-current="page"] .lbl { overflow: hidden; text-overflow: ellipsis; }
+  .top .long { display: none; }
+  .top .short { display: inline; }
+  .tr { grid-template-columns: minmax(0, 1fr) auto; }
+  .tr .when { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <header class="row">
-    <div>
-      <h1>Homecraft Connector</h1>
-      <div class="muted">Verze <span id="version">–</span></div>
+  <header class="top">
+    <span class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg></span>
+    <div class="grow">
+      <h1>Homecraft</h1>
+      <div class="sub"><span id="haName"></span><span class="long"><span id="haNameSep" hidden> · </span>o dům se stará Homecraft</span></div>
     </div>
-    <span id="headConn" class="badge off" style="margin-left:auto">Odpojeno</span>
+    <span id="headConn" class="pill dotted bad"><span class="long" id="headConnLong">Homecraft nedostupný</span><span class="short" id="headConnShort">Nedostupný</span></span>
   </header>
 
-  <nav class="tabs" aria-label="Sekce">
-    <a href="#overview">Přehled</a>
-    <a href="#features">Features</a>
-    <a href="#network">Síť</a>
-    <a href="#security">Zabezpečení</a>
-    <a href="#audit">Audit</a>
+  <nav class="nav" aria-label="Sekce">
+    <a href="#home"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span class="lbl">Domů</span></a>
+    <a href="#heating"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg><span class="lbl">Topení</span><span class="n" id="heatingCount" hidden></span></a>
+    <a href="#remote"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="lbl">Vzdálený přístup</span></a>
+    <a href="#devices"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span class="lbl">Zařízení v síti</span></a>
+    <a href="#security"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z"/></svg><span class="lbl">Homecraft a bezpečnost</span></a>
   </nav>
 
-  <div data-tab="overview" class="tiles">
-    <a class="card tile" href="#security">
-      <span class="tile-k">Spojení</span>
-      <span class="tile-big" id="tConn">–</span>
-      <span class="muted" id="tConnSub"></span>
-    </a>
-    <a class="card tile" href="#security">
-      <span class="tile-k">Zabezpečení</span>
-      <span class="tile-big tile-text" id="tSec">–</span>
-      <span class="muted" id="tSecSub"></span>
-    </a>
-    <a class="card tile" href="#features">
-      <span class="tile-k">Features</span>
-      <span class="tile-big" id="tFeat">–</span>
-      <span class="muted" id="tFeatSub"></span>
-      <span><span class="badge" id="tFeatUpd">0 aktualizací</span></span>
-    </a>
-    <a class="card tile" href="#network">
-      <span class="tile-k">Síťová zařízení</span>
-      <span class="tile-big" id="tNet">–</span>
-      <span class="muted" id="tNetSub"></span>
-      <span><span class="badge" id="tNetNew">0 nových ze skenu</span></span>
-    </a>
-    <a class="card tile" href="#audit">
-      <span class="tile-k">Audit</span>
-      <span class="tile-big" id="tAudit">–</span>
-      <span class="muted" id="tAuditSub"></span>
-    </a>
-    <section class="card tile">
-      <h2 class="tile-k">Pozastavení</h2>
-      <label class="switch"><input type="checkbox" id="paused"> Pozastavit Homecraft</label>
-      <p class="muted">Doplněk odmítne každý požadavek z Homecraftu (chyba „paused“).
-        Otevřená sezení do Home Assistantu se hned zavřou, spojení s Homecraftem zůstává.
-        Nastavení přežije restart doplňku.</p>
-      <div id="pauseMsg" class="msg"></div>
-    </section>
-    <section class="card tile">
-      <h2 class="tile-k">Chybová hlášení</h2>
-      <label class="switch"><input type="checkbox" id="errorReports"> Posílat chybová hlášení Homecraftu</label>
-      <p class="muted">Posílají se jen chyby automatizací a skriptů Homecraftu a chyby z Node-RED
-        (<code>homecraft_error</code>), jen povolená pole: feature, verze, kód, uzel, entita,
-        oblast, okruh, zpráva a stopa rozhodnutí. Stejná chyba nejvýš jednou za 10 minut.
-        Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.
-        Chyby z logu HA zapne doplněk souborem <code>packages/homecraft_system_log.yaml</code>
-        (<code>system_log: fire_event: true</code>). Recorder ukládá každé varování a chybu HA
-        jako událost <code>system_log_event</code> do historie; kdo to nechce, doplní
-        <code>recorder: exclude: event_types: [system_log_event]</code>.</p>
-      <div id="errorReportsMsg" class="msg"></div>
-      <div id="systemLogState" class="msg"></div>
-      <div id="systemLogMessage" class="msg mono"></div>
-      <div class="row">
-        <button type="button" id="systemLogRestart" hidden>Restartovat Home Assistant</button>
-        <button type="button" id="systemLogCheck" hidden>Zkontrolovat znovu</button>
+  <div id="connMsg" class="msg"></div>
+
+  <!-- Domů -->
+  <div data-tab="home" class="stack">
+    <div class="alert warn" id="offlineBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+      <div><b>Homecraft teď nemůže do domu.</b> Topení, kamery i automatizace běží dál normálně, jen změny
+        z Homecraftu počkají, až bude zase připojený.</div></div>
+
+    <div class="grid tiles">
+      <a class="card ft" href="#security">
+        <div class="hd"><span class="dot" id="tConnDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+          <div class="grow"><div class="t">Spojení</div><div class="s">s Homecraftem</div></div></div>
+        <div><div class="big" id="tConn">–</div><div class="meta" id="tConnSub"></div></div>
+      </a>
+      <a class="card ft" href="#devices">
+        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+          <div class="grow"><div class="t">Zařízení v síti</div><div class="s">adresy zůstávají doma</div></div></div>
+        <div><div class="big" id="tNet">–</div><div class="meta" id="tNetSub"></div></div>
+        <div class="foot"><span class="pill" id="tNetNew">0 nových ze skenu</span></div>
+      </a>
+      <a class="card ft" href="#security">
+        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg></span>
+          <div class="grow"><div class="t">Co Homecraft dělal</div><div class="s">za posledních 24 h</div></div></div>
+        <div><div class="big" id="tAudit">–</div><div class="meta" id="tAuditSub"></div></div>
+      </a>
+      <a class="card ft" href="#security">
+        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"/></svg></span>
+          <div class="grow"><div class="t">Zabezpečení</div><div class="s">tokeny doplňku</div></div></div>
+        <div><div class="big" id="tSec" style="font-size:18px">–</div><div class="meta" id="tSecSub"></div></div>
+      </a>
+    </div>
+
+    <div class="grid home">
+      <section class="card" aria-labelledby="featH">
+        <div class="hd">
+          <div class="grow"><h2 class="t" id="featH">Co máte od Homecraftu</h2>
+            <div class="s">Nastavuje technik v Homecraftu, tady je jen přehled.</div></div>
+          <a class="sb sf" id="projectLink" target="_blank" rel="noopener noreferrer" hidden>Otevřít projekt v Homecraftu</a>
+        </div>
+        <div class="rows" id="featRows"></div>
+        <p id="featEmpty" class="help">Souhrn pošle Homecraft po připojení a po každém Apply.</p>
+      </section>
+
+      <section class="card" aria-labelledby="pauseH">
+        <div class="hd" style="flex-wrap:nowrap"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg></span>
+          <div class="grow"><h2 class="t" id="pauseH">Pozastavit Homecraft</h2><div class="s">Dům běží dál, Homecraft nic nezmění.</div></div>
+          <input type="checkbox" class="sw" id="paused" role="switch" aria-labelledby="pauseH"></div>
+        <p class="help">Doplněk odmítne každý požadavek z Homecraftu. Otevřená sezení do Home Assistantu se hned
+          zavřou, spojení s Homecraftem zůstává. Nastavení přežije restart doplňku.</p>
+        <div id="pauseMsg" class="msg"></div>
+      </section>
+    </div>
+
+    <section class="card" id="updates" aria-labelledby="updatesH" hidden>
+      <h2 class="t" id="updatesH">Aktualizace</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Položka</th><th>Typ</th><th>Nainstalováno</th><th>Dostupné</th><th></th></tr></thead>
+          <tbody id="updatesBody"></tbody>
+        </table>
       </div>
-      <div id="systemLogMsg" class="msg"></div>
+      <div id="updatesMsg" class="msg"></div>
     </section>
   </div>
 
-  <section class="card" id="updates" data-tab="overview">
-    <h2>Aktualizace</h2>
-    <div class="scroll" id="updatesTable" hidden>
-      <table>
-        <thead><tr><th>Položka</th><th>Typ</th><th>Nainstalováno</th><th>Dostupné</th><th></th></tr></thead>
-        <tbody id="updatesBody"></tbody>
-      </table>
-    </div>
-    <p id="updatesEmpty" class="muted">–</p>
-    <div id="updatesMsg" class="msg"></div>
+  <!-- Topení, Vzdálený přístup: filled by later issues -->
+  <section class="card center" data-tab="heating" hidden>
+    <span class="dot heat"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg></span>
+    <h2 class="t">Topení</h2>
+    <p class="help">Připravujeme. Tady brzy uvidíte a nastavíte topení, které vám nainstaloval Homecraft.</p>
+  </section>
+  <section class="card center" data-tab="remote" hidden>
+    <span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span>
+    <h2 class="t">Vzdálený přístup</h2>
+    <p class="help">Připravujeme. Tady brzy zapnete přístup k domu odkudkoli a přidáte do něj telefon nebo počítač.</p>
   </section>
 
-  <div data-tab="features" class="stack" hidden>
-    <div>
-      <h2 style="margin:0">Features v tomto domě</h2>
-      <div class="muted">Co Homecraft nainstaloval do Home Assistantu. Nastavení a aktualizace jsou
-        v Homecraftu, tady je jen přehled.</div>
-    </div>
-    <div class="tiles" id="featTiles"></div>
-    <p id="featEmpty" class="muted">Souhrn pošle Homecraft po připojení a po každém Apply.</p>
-  </div>
-
-  <div data-tab="network" class="stack" hidden>
-  <section class="card">
-    <div class="row">
-      <div>
-        <h2 style="margin:0">Síťová zařízení</h2>
-        <div class="muted">Adresy zůstávají v tomto Home Assistantu, bez hesel.</div>
+  <!-- Zařízení v síti -->
+  <div data-tab="devices" class="stack" hidden>
+  <section class="card" aria-labelledby="netH">
+    <div class="hd">
+      <div class="grow">
+        <h2 class="t" id="netH">Zařízení v síti</h2>
+        <div class="s">Adresy a odkazy zůstávají v tomto Home Assistantu, bez hesel.</div>
       </div>
-      <div class="row" style="margin-left:auto">
-        <button id="netHa">Načíst z HA</button>
-        <button id="netScan">Doporučený sken</button>
+      <div class="btns">
+        <button class="sf" id="netHa">Načíst z HA</button>
+        <button class="sf" id="netScan">Doporučený sken</button>
         <button class="primary" id="netAdd">Přidat ručně</button>
       </div>
     </div>
-    <div class="row" id="netFilters" style="margin:12px 0"></div>
+    <div class="chips" id="netFilters"></div>
     <div class="scroll" id="netTable" hidden>
       <table>
         <thead><tr><th>Název</th><th>Typ</th><th>Adresa</th><th>Jméno v síti (.local)</th>
@@ -222,12 +306,12 @@ a.feat-link:hover { border-color: var(--accent); }
         <tbody id="netBody"></tbody>
       </table>
     </div>
-    <p id="netEmpty" class="muted">Zatím žádná zařízení.</p>
+    <p id="netEmpty" class="help">Zatím žádná zařízení.</p>
     <div id="netMsg" class="msg"></div>
   </section>
 
   <section class="card" id="netEdit" hidden>
-    <h2 id="netEditTitle">Nové zařízení</h2>
+    <h2 class="t" id="netEditTitle">Nové zařízení</h2>
     <form id="netForm" class="form" autocomplete="off">
       <label>Název <input id="nName" required maxlength="100"></label>
       <label>Typ <select id="nKind"></select></label>
@@ -237,9 +321,9 @@ a.feat-link:hover { border-color: var(--accent); }
       <label class="full">Webové rozhraní a streamy (jedna URL na řádek, bez jména a hesla)
         <textarea id="nUrls" rows="3" spellcheck="false" placeholder="http://10.0.0.10"></textarea></label>
       <label class="full">Poznámka <textarea id="nNote" rows="2" maxlength="1000"></textarea></label>
-      <div class="row full">
+      <div class="btns full">
         <button class="primary" type="submit">Uložit</button>
-        <button type="button" id="netCancel">Zrušit</button>
+        <button type="button" class="sf" id="netCancel">Zrušit</button>
         <button type="button" id="netDelete" class="danger" style="margin-left:auto">Smazat</button>
       </div>
     </form>
@@ -247,11 +331,11 @@ a.feat-link:hover { border-color: var(--accent); }
   </section>
 
   <dialog id="netImport" aria-labelledby="netImportTitle">
-    <div class="row">
-      <h2 id="netImportTitle" style="margin:0">Načíst z Home Assistantu</h2>
-      <button type="button" id="netImportClose" aria-label="Zavřít" style="margin-left:auto">×</button>
+    <div class="hd">
+      <h2 class="t grow" id="netImportTitle">Načíst z Home Assistantu</h2>
+      <button type="button" class="sf" id="netImportClose" aria-label="Zavřít">×</button>
     </div>
-    <div class="muted">Zařízení z registru HA a z jeho objevování v síti (DHCP, zeroconf, SSDP).</div>
+    <div class="help">Zařízení z registru HA a z jeho objevování v síti (DHCP, zeroconf, SSDP).</div>
     <div class="scroll" id="netImportTable" hidden>
       <table>
         <thead><tr><th aria-label="Vybrat"></th><th>Zařízení</th><th>Adresa</th>
@@ -260,18 +344,18 @@ a.feat-link:hover { border-color: var(--accent); }
       </table>
     </div>
     <div id="netImportMsg" class="msg"></div>
-    <div class="row" style="justify-content:flex-end">
-      <button type="button" id="netImportCancel">Zrušit</button>
+    <div class="btns" style="justify-content:flex-end">
+      <button type="button" class="sf" id="netImportCancel">Zrušit</button>
       <button type="button" class="primary" id="netImportAdd" disabled>Přidat vybraná (0)</button>
     </div>
   </dialog>
 
   <dialog id="netScanDlg" aria-labelledby="netScanTitle">
-    <div class="row">
-      <h2 id="netScanTitle" style="margin:0">Doporučený sken sítě</h2>
-      <button type="button" id="netScanClose" aria-label="Zavřít" style="margin-left:auto">×</button>
+    <div class="hd">
+      <h2 class="t grow" id="netScanTitle">Doporučený sken sítě</h2>
+      <button type="button" class="sf" id="netScanClose" aria-label="Zavřít">×</button>
     </div>
-    <div class="muted">Podsíť z Home Assistantu · běží jen v tomto domě, nic se neposílá ven.</div>
+    <div class="help">Podsíť z Home Assistantu · běží jen v tomto domě, nic se neposílá ven.</div>
     <div class="profiles" id="netScanProfiles">
       <label class="prof"><input type="checkbox" value="shelly" checked><span><strong>Shelly</strong><br>
         <span class="muted">brány BLU, relé, zásuvky · port 80, /shelly</span></span></label>
@@ -282,9 +366,9 @@ a.feat-link:hover { border-color: var(--accent); }
       <label class="prof"><input type="checkbox" value="web"><span><strong>Ostatní web</strong><br>
         <span class="muted">cokoli s HTTP 80/443</span></span></label>
     </div>
-    <div class="row">
+    <div class="btns">
       <button type="button" class="primary" id="netScanRun">Spustit sken</button>
-      <span id="netScanSummary" class="muted"></span>
+      <span id="netScanSummary" class="help"></span>
     </div>
     <div class="scroll" id="netScanTable" hidden>
       <table>
@@ -294,91 +378,141 @@ a.feat-link:hover { border-color: var(--accent); }
       </table>
     </div>
     <div id="netScanMsg" class="msg"></div>
-    <p class="muted" style="margin:0">Jméno v síti (např. <span class="mono">shelly….local</span>) funguje jen
+    <p class="help">Jméno v síti (např. <span class="mono">shelly….local</span>) funguje jen
       v domácí síti. Hesla se nezadávají ani neukládají; přihlášení k zařízením patří do Home Assistantu.</p>
-    <div class="row" style="justify-content:flex-end">
-      <button type="button" id="netScanCancel">Zrušit</button>
+    <div class="btns" style="justify-content:flex-end">
+      <button type="button" class="sf" id="netScanCancel">Zrušit</button>
       <button type="button" class="primary" id="netScanAdd" disabled>Přidat vybraná (0)</button>
     </div>
   </dialog>
   </div>
 
+  <!-- Homecraft a bezpečnost -->
   <div data-tab="security" class="stack" hidden>
-  <section class="card">
-    <h2>Spojení</h2>
-    <div class="row">
-      <span id="conn" class="badge off">Odpojeno</span>
-      <span id="pausedBadge" class="badge paused" hidden>Pozastaveno</span>
-      <button id="reconnect">Připojit znovu</button>
-    </div>
-    <dl>
-      <dt>Server</dt><dd id="server">–</dd>
-      <dt>Poslední spojení</dt><dd id="lastConnected">–</dd>
-      <dt>Poslední chyba</dt><dd id="lastError">–</dd>
-    </dl>
-    <div id="connMsg" class="msg"></div>
-  </section>
+    <section class="card center" id="pairCard" aria-labelledby="pairH" hidden>
+      <span class="dot run"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+      <h2 class="t" id="pairH" style="font-size:18px">Spárujte dům s Homecraftem</h2>
+      <p class="help" style="max-width:460px">Technik vidí v Homecraftu žádost o spárování. Porovnejte s ním tento kód – musí být stejný.</p>
+      <div class="verification" id="verificationBig">–</div>
+      <span class="pill warn">Čeká na schválení v Homecraftu</span>
+    </section>
 
-  <section class="card">
-    <h2>Spárování</h2>
-    <div class="row"><span id="verification" class="verification">–</span>
-      <span id="pendingBadge" class="badge paused" hidden>Čeká na schválení v Homecraftu</span></div>
-    <p class="muted">Ověřovací kód: porovnej ho v Homecraftu se žádostí o spárování.</p>
-    <h2>Párovací kód</h2>
-    <div class="row"><code id="code">–</code><button id="copy">Kopírovat</button></div>
-    <p class="muted">Záložní cesta: vlož ho v Homecraftu: projekt → připojení HA → Homecraft Connector.</p>
-  </section>
+    <div class="grid split">
+      <section class="card" aria-labelledby="auditH">
+        <div class="hd"><div class="grow"><h2 class="t" id="auditH">Co Homecraft dělal</h2>
+          <div class="s">Každý požadavek projde doplňkem. Co doplněk nedovolí, odmítne.</div></div></div>
+        <div class="chips">
+          <button type="button" class="chip" id="auditAll" aria-pressed="true">Vše</button>
+          <button type="button" class="chip" id="auditRefused" aria-pressed="false">Odmítnuté</button>
+        </div>
+        <div class="tbl" id="audit"></div>
+        <p id="auditEmpty" class="help">Zatím žádné operace.</p>
+      </section>
 
-  <section class="card">
-    <h2>Přístupový token Homecraftu</h2>
-    <div id="tokenSet" hidden>
-      <div class="row"><span class="badge on">Token nastaven ✓</span>
-        <span id="tokenUpdated" class="muted" hidden></span>
-        <span id="tokenPending" class="muted" hidden>Nový token od Homecraftu čeká na ověření</span>
-        <button id="tokenChange">Změnit</button>
-        <button id="tokenDelete" class="danger">Smazat</button></div>
-    </div>
-    <form id="tokenForm" hidden autocomplete="off">
-      <div class="row">
-        <input type="password" id="token" placeholder="client_id:client_secret" autocomplete="off" spellcheck="false">
-        <button class="primary" type="submit">Uložit</button>
-        <button type="button" id="tokenCancel" hidden>Zrušit</button>
+      <div class="stack">
+        <section class="card" aria-labelledby="connH">
+          <div class="hd"><span class="dot" id="connDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+            <div class="grow"><h2 class="t" id="connH">Spojení s Homecraftem</h2><div class="s" id="connSince"></div></div></div>
+          <div class="grid g2">
+            <div class="tile"><div class="l">Stav</div><div class="v" id="conn">Odpojeno</div><div class="c" id="connSub"></div></div>
+            <div class="tile"><div class="l">Ověřovací kód</div><div class="v mono" id="verification">–</div>
+              <div class="c" id="pendingBadge" hidden>Čeká na schválení v Homecraftu</div></div>
+          </div>
+          <div class="field">
+            <div class="fl"><label class="lbl" for="paused2">Pozastavit Homecraft</label>
+              <p class="help">Homecraft nic nezmění ani nepřečte. Dům běží dál.</p>
+              <div id="pause2Msg" class="msg"></div></div>
+            <input type="checkbox" class="sw" id="paused2" role="switch">
+          </div>
+          <div class="field">
+            <div class="fl"><label class="lbl" for="errorReports">Posílat chyby technikovi</label>
+              <p class="help">Jen chyby automatizací a skriptů od Homecraftu a z Node-RED, ne vaše vlastní.</p>
+              <details class="more"><summary>Co se posílá</summary>
+                <p>Jen chyby automatizací a skriptů Homecraftu a chyby z Node-RED
+                  (<code>homecraft_error</code>), jen povolená pole: feature, verze, kód, uzel, entita,
+                  oblast, okruh, zpráva a stopa rozhodnutí. Stejná chyba nejvýš jednou za 10 minut.
+                  Bez připojení nebo při pauze se hlášení zahodí. Vlastní automatizace a skripty se neposílají nikdy.
+                  Chyby z logu HA zapne doplněk souborem <code>packages/homecraft_system_log.yaml</code>
+                  (<code>system_log: fire_event: true</code>). Recorder ukládá každé varování a chybu HA
+                  jako událost <code>system_log_event</code> do historie; kdo to nechce, doplní
+                  <code>recorder: exclude: event_types: [system_log_event]</code>.</p></details>
+              <div id="errorReportsMsg" class="msg"></div>
+              <div id="systemLogState" class="msg"></div>
+              <div id="systemLogMessage" class="msg mono"></div>
+              <div class="btns">
+                <button type="button" class="sf" id="systemLogRestart" hidden>Restartovat Home Assistant</button>
+                <button type="button" class="sf" id="systemLogCheck" hidden>Zkontrolovat znovu</button>
+              </div>
+              <div id="systemLogMsg" class="msg"></div>
+            </div>
+            <input type="checkbox" class="sw" id="errorReports" role="switch">
+          </div>
+        </section>
+
+        <details class="adv">
+          <summary><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Pro technika</summary>
+          <div class="rows">
+            <div class="row"><div class="grow">
+              <div class="n">Přístupový token Homecraftu</div>
+              <div id="tokenSet" hidden>
+                <div class="m">nastaven ✓ <span id="tokenUpdated" hidden></span></div>
+                <div class="m" id="tokenPending" hidden>Nový token od Homecraftu čeká na ověření</div>
+                <div class="btns" style="margin-top:6px"><button class="sf" id="tokenChange">Změnit</button>
+                  <button id="tokenDelete" class="danger">Smazat</button></div>
+              </div>
+              <form id="tokenForm" hidden autocomplete="off">
+                <div class="btns" style="margin-top:6px">
+                  <input type="password" id="token" placeholder="client_id:client_secret" autocomplete="off" spellcheck="false" aria-label="Přístupový token">
+                  <button class="primary" type="submit">Uložit</button>
+                  <button type="button" class="sf" id="tokenCancel" hidden>Zrušit</button>
+                </div>
+                <p class="help">Token se jen ukládá, panel ani nastavení doplňku ho už nikdy nezobrazí.</p>
+              </form>
+              <div id="tokenMsg" class="msg"></div>
+            </div></div>
+
+            <div class="row"><div class="grow">
+              <div class="n">Token správce Home Assistantu</div>
+              <p class="m">Jen pro ingress do doplňků (Node-RED, Grafana, InfluxDB, go2rtc):
+                relaci ingressu vytvoří Home Assistant jen správci. Doplněk ho nikam neposílá
+                a nepoužije na nic jiného. Vytvoř ho v profilu správce → Zabezpečení →
+                Dlouhodobé přístupové tokeny.</p>
+              <div id="haTokenSet" hidden>
+                <div class="btns"><span class="m">nastaven ✓</span>
+                  <button id="haTokenDelete" class="danger">Smazat</button></div>
+              </div>
+              <form id="haTokenForm" hidden autocomplete="off">
+                <div class="btns">
+                  <input type="password" id="haToken" placeholder="dlouhodobý přístupový token" autocomplete="off" spellcheck="false" aria-label="Token správce HA">
+                  <button class="primary" type="submit">Uložit</button>
+                </div>
+              </form>
+              <div id="haTokenMsg" class="msg"></div>
+            </div></div>
+
+            <div class="row"><div class="grow">
+              <div class="n">Server</div>
+              <div class="m mono" id="server">–</div>
+              <div class="m">Poslední spojení: <span id="lastConnected">–</span></div>
+              <div class="m">Poslední chyba: <span id="lastError">–</span></div>
+              <div id="reconnectMsg" class="msg"></div>
+            </div><button class="sf" id="reconnect">Připojit znovu</button></div>
+
+            <div class="row"><div class="grow">
+              <div class="n">Párovací kód</div>
+              <div class="m"><code id="code">–</code></div>
+              <p class="m">Záložní cesta: vlož ho v Homecraftu: projekt → připojení HA → Homecraft Connector.</p>
+            </div><button class="sf" id="copy">Kopírovat</button></div>
+
+            <div class="row"><div class="grow">
+              <div class="n">Doplněk</div>
+              <div class="m">Homecraft Connector <span id="version">–</span></div>
+            </div></div>
+          </div>
+        </details>
       </div>
-      <p class="muted">Token se jen ukládá, panel ani nastavení doplňku ho už nikdy nezobrazí.</p>
-    </form>
-    <div id="tokenMsg" class="msg"></div>
-  </section>
-
-  <section class="card">
-    <h2>Token správce Home Assistantu</h2>
-    <p class="muted">Jen pro ingress do doplňků (Node-RED, Grafana, InfluxDB, go2rtc):
-      relaci ingressu vytvoří Home Assistant jen správci. Doplněk ho nikam neposílá
-      a nepoužije na nic jiného. Vytvoř ho v profilu správce → Zabezpečení →
-      Dlouhodobé přístupové tokeny.</p>
-    <div id="haTokenSet" hidden>
-      <div class="row"><span class="badge on">Token nastaven ✓</span>
-        <button id="haTokenDelete" class="danger">Smazat</button></div>
     </div>
-    <form id="haTokenForm" hidden autocomplete="off">
-      <div class="row">
-        <input type="password" id="haToken" placeholder="dlouhodobý přístupový token" autocomplete="off" spellcheck="false">
-        <button class="primary" type="submit">Uložit</button>
-      </div>
-    </form>
-    <div id="haTokenMsg" class="msg"></div>
-  </section>
   </div>
-
-  <section class="card" data-tab="audit" hidden>
-    <h2>Audit posledních operací</h2>
-    <div class="scroll">
-      <table>
-        <thead><tr><th>Čas</th><th>Operace</th><th>Cíl</th><th>Výsledek</th><th>Trvání</th></tr></thead>
-        <tbody id="audit"></tbody>
-      </table>
-    </div>
-    <p id="auditEmpty" class="muted">Zatím žádné operace.</p>
-  </section>
 </main>
 <script>
 "use strict";
@@ -455,17 +589,25 @@ function renderSystemLog(sl) {
 
 async function refreshStatus() {
   const s = await call("GET", "api/status");
+  $("haName").textContent = s.ha_name || "";
+  $("haNameSep").hidden = !s.ha_name;
   $("version").textContent = s.version;
-  $("conn").textContent = s.connected ? "Připojeno" : "Odpojeno";
-  $("conn").className = "badge " + (s.connected ? "on" : "off");
-  $("pausedBadge").hidden = !s.paused;
+  const [connText, connCls] = s.paused ? ["Pozastaveno", "warn"] : s.connected ? ["Online", "ok"] : ["Odpojeno", "bad"];
+  $("conn").textContent = connText;
+  $("connSub").textContent = s.connected ? "" : s.last_error || "Připojuji…";
+  $("connSince").textContent = s.connected && s.last_connected ? "Online od " + fmtTime(s.last_connected) : "";
+  $("connDot").className = $("tConnDot").className = "dot" + (s.connected && !s.paused ? " okd" : "");
+  $("headConnLong").textContent = s.paused ? "Homecraft pozastaven" : s.connected ? "Připojeno k Homecraftu" : "Homecraft nedostupný";
+  $("headConnShort").textContent = s.paused ? "Pozastaveno" : s.connected ? "Připojeno" : "Nedostupný";
+  $("headConn").className = "pill dotted " + connCls;
+  $("offlineBanner").hidden = s.connected;
   $("server").textContent = s.server_url;
   $("lastConnected").textContent = fmtTime(s.last_connected);
   $("lastError").textContent = s.last_error || "–";
   $("code").textContent = s.pairing_code;
-  $("verification").textContent = s.verification_code;
-  $("pendingBadge").hidden = !s.pending_approval;
-  if (document.activeElement !== $("paused")) $("paused").checked = s.paused;
+  $("verification").textContent = $("verificationBig").textContent = s.verification_code;
+  $("pendingBadge").hidden = $("pairCard").hidden = !s.pending_approval;
+  for (const id of ["paused", "paused2"]) if (document.activeElement !== $(id)) $(id).checked = s.paused;
   if (document.activeElement !== $("errorReports")) $("errorReports").checked = s.error_reports;
   renderSystemLog(s.system_log || { state: "off" });
   $("tokenSet").hidden = !s.token_set || editingToken;
@@ -477,9 +619,7 @@ async function refreshStatus() {
   $("haTokenForm").hidden = s.ha_token_set;
   $("tokenUpdated").textContent = "(aktualizován " + fmtTime(s.token_updated_at) + " Homecraftem)";
 
-  $("headConn").textContent = $("conn").textContent;
-  $("headConn").className = $("conn").className;
-  $("tConn").textContent = s.paused ? "Pozastaveno" : s.connected ? "Online" : "Odpojeno";
+  $("tConn").textContent = connText;
   $("tConnSub").textContent = s.pending_approval ? "Čeká na schválení v Homecraftu"
     : s.connected ? hostOf(s.server_url) : s.last_error || "Připojuji…";
   $("tSec").textContent = !s.token_set ? "Chybí přístupový token"
@@ -488,47 +628,109 @@ async function refreshStatus() {
     : !s.ha_token_set ? "Ingress do doplňků (Node-RED, Grafana…) nepůjde"
     : "Přístupový token Homecraftu · Token správce HA";
   const a = s.audit_24h;
-  $("tAudit").textContent = a.count + (a.capped ? "+" : "");
-  $("tAuditSub").textContent = "operací za 24 h · " + a.refused + " odmítnutých";
+  $("tAudit").textContent = a.count + (a.capped ? "+" : "") + " operací";
+  $("tAuditSub").textContent = a.refused + " odmítnutých";
 }
 
 function hostOf(url) {
   try { return new URL(url).host; } catch { return url; }
 }
 
+// The tabs of v1 (bookmarks, links in Homecraft) land on their new place.
+const OLD_TABS = { overview: "home", features: "home", network: "devices", audit: "security" };
+
 function showTab() {
+  let id = location.hash.slice(1);
+  if (Object.hasOwn(OLD_TABS, id)) {
+    id = OLD_TABS[id];
+    history.replaceState(null, "", "#" + id);
+  }
   const panels = [...document.querySelectorAll("[data-tab]")];
-  const id = panels.some((p) => p.dataset.tab === location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+  if (!panels.some((p) => p.dataset.tab === id)) id = "home";
   for (const p of panels) p.hidden = p.dataset.tab !== id;
-  for (const a of document.querySelectorAll(".tabs a")) {
+  for (const a of document.querySelectorAll(".nav a")) {
     if (a.hash === "#" + id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   }
 }
 window.addEventListener("hashchange", showTab);
 showTab();
 
-const RESULT = { paused: ["Pozastaveno", "warn"], not_allowed: ["Nepovoleno", "bad"] };
+// --- What Homecraft did: the audit in plain Czech ---------------------------
+const FILE_VERBS = { "file.read": "Přečetl soubor", "file.write": "Zapsal soubor", "file.delete": "Smazal soubor",
+  "file.list": "Prošel složku" };
+// op -> [sentence, show the raw target under it]
+const AUDIT_TEXT = {
+  "ws.open": ["Otevřel spojení do Home Assistantu", false],
+  "ws.close": ["Zavřel spojení do Home Assistantu", false],
+  http: ["Požadavek na Home Assistant", true],
+  "config.packages_include": ["Zapnul načítání balíčků Homecraftu", true],
+  "features.report": ["Poslal přehled toho, co nainstaloval", true],
+  "network_devices.get": ["Přečetl seznam zařízení v síti", true],
+  "network_devices.import": ["Přenesl svá zařízení v síti", false],
+  "access_token.set": ["Poslal nový přístupový token", false],
+  "access_token.commit": ["Přepnul na nový přístupový token", false],
+  "update.run": ["Aktualizace spuštěná z panelu", true],
+  "updates.set": ["Poslal seznam aktualizací", false],
+  "errors.report": ["Dostal chybová hlášení", true],
+};
 
-async function refreshAudit() {
-  const rows = await call("GET", "api/audit");
-  const body = $("audit");
-  body.replaceChildren(...rows.map((e) => {
-    const tr = document.createElement("tr");
-    const [label, cls] = e.ok ? ["OK", "ok"] : RESULT[e.code] || ["Chyba: " + e.code, "bad"];
-    const cells = [
-      [fmtTime(e.ts)], [e.op], [e.target, "target"], [label, cls],
-      [e.ms == null ? "" : Math.round(e.ms) + " ms"],
-    ];
-    for (const [text, c] of cells) {
-      const td = document.createElement("td");
-      td.textContent = text;
-      if (c) td.className = c;
-      tr.append(td);
+// [sentence, detail]; the detail (the raw target) stays visible, smaller.
+function auditText(e) {
+  const t = e.target || "";
+  if (e.op === "ws.send") {
+    if (t.startsWith("call_service ")) return ["Ovládal zařízení " + t.slice(13), ""];
+    if (t.startsWith("supervisor/api ")) return ["Pracoval s doplňky Home Assistantu", t.slice(15)];
+    return ["Poslal příkaz do Home Assistantu", t];
+  }
+  if (Object.hasOwn(FILE_VERBS, e.op)) return [FILE_VERBS[e.op], t];
+  if (Object.hasOwn(AUDIT_TEXT, e.op)) return [AUDIT_TEXT[e.op][0], AUDIT_TEXT[e.op][1] ? t : ""];
+  return [e.op, t];
+}
+
+const RESULT = { paused: ["pozastaveno", "warn"], not_allowed: ["odmítnuto doplňkem", "bad"] };
+let auditRows = [];
+let auditRefused = false;
+
+function renderAudit() {
+  const refused = auditRows.filter((e) => !e.ok);
+  $("auditRefused").textContent = "Odmítnuté " + refused.length;
+  $("auditAll").setAttribute("aria-pressed", String(!auditRefused));
+  $("auditRefused").setAttribute("aria-pressed", String(auditRefused));
+  const rows = auditRefused ? refused : auditRows;
+  $("audit").replaceChildren(...rows.map((e) => {
+    const tr = document.createElement("div");
+    tr.className = "tr";
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = fmtTime(e.ts);
+    const what = document.createElement("span");
+    what.className = "what";
+    const [text, detail] = auditText(e);
+    what.textContent = text;
+    if (detail) {
+      const d = document.createElement("div");
+      d.className = "mono";
+      d.textContent = detail;
+      what.append(d);
     }
+    const [label, cls] = e.ok ? ["provedeno", "ok"] : RESULT[e.code] || ["chyba: " + e.code, "bad"];
+    const pill = document.createElement("span");
+    pill.className = "pill " + cls;
+    pill.textContent = label;
+    if (e.ms != null) pill.title = Math.round(e.ms) + " ms";
+    tr.append(when, what, pill);
     return tr;
   }));
   $("auditEmpty").hidden = rows.length > 0;
+  $("auditEmpty").textContent = auditRefused ? "Nic odmítnuto." : "Zatím žádné operace.";
 }
+
+async function refreshAudit() {
+  auditRows = await call("GET", "api/audit");
+  renderAudit();
+}
+$("auditAll").onclick = () => { auditRefused = false; renderAudit(); };
+$("auditRefused").onclick = () => { auditRefused = true; renderAudit(); };
 
 const KINDS = { card: "Karta" };
 
@@ -547,7 +749,7 @@ function updateAction(u, paused) {
   if (u.state === "failed") {
     const err = document.createElement("div");
     err.textContent = u.message || "Aktualizace selhala";
-    err.style.color = "var(--bad)";
+    err.className = "msg err";
     td.append(err);
   }
   const b = document.createElement("button");
@@ -588,58 +790,37 @@ async function refreshUpdates() {
     tr.append(updateAction(u, s.paused));
     return tr;
   }));
-  $("updatesTable").hidden = s.items.length === 0;
-  $("updatesEmpty").hidden = s.items.length > 0;
-  $("updatesEmpty").textContent = s.connected ? "Vše je aktuální." : "Seznam pošle Homecraft po připojení.";
+  $("updates").hidden = s.items.length === 0;  // a customer sees the section only when there is something to do
 }
 
-// --- Features Homecraft installed (homecraft#636) -------------------------
-const FEAT_STATUS = { running: ["Běží", "on"], update: ["Aktualizace", "infob"], addon_error: ["Chyba doplňku", "warnb"] };
+// --- What the home has from Homecraft (homecraft#636) ---------------------
+const FEAT_STATUS = { running: ["běží", "ok"], update: ["aktualizace čeká na technika", "warn"],
+  addon_error: ["chyba doplňku", "bad"] };
 let feats = { project_url: "", features: [], received_at: null };
 let lastFeats = null;
 
-function featTile(f) {
-  const art = document.createElement("article");
-  art.className = "card feat";
-  const head = document.createElement("div");
-  head.className = "row";
-  const h = document.createElement("h2");
-  h.textContent = f.name;
-  const [label, cls] = FEAT_STATUS[f.status] || [f.status, "grayb"];
-  const badge = document.createElement("span");
-  badge.className = "badge " + cls;
-  badge.style.marginLeft = "auto";
-  badge.textContent = label;
-  head.append(h, badge);
-  const dl = document.createElement("dl");
+function line(text, cls) {
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = text;
+  return div;
+}
+
+function featRow(f) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const body = document.createElement("div");
+  body.className = "grow";
   const version = f.available && f.available !== f.version ? f.version + " → " + f.available : f.version;
-  for (const [k, v, mono] of [
-    ["Verze", version || "–", true],
-    ["Instance", f.instances.join(", ") || "–"],
-    ["Apply", fmtTime(f.applied_at)],
-    ["Soubory", f.files.join("\n") || "–", true],
-  ]) {
-    const dt = document.createElement("dt");
-    dt.textContent = k;
-    const dd = document.createElement("dd");
-    dd.textContent = v;
-    if (mono) dd.className = "mono";
-    dd.style.whiteSpace = "pre-line";
-    dl.append(dt, dd);
-  }
-  art.append(head, dl);
-  if (f.error) {
-    const err = document.createElement("div");
-    err.className = "err";
-    err.textContent = f.error;
-    art.append(err);
-  }
-  const net = document.createElement("div");
-  net.className = "muted";
-  net.style.fontSize = "13px";
-  net.textContent = "Síť: " + (f.devices.map(deviceName).join(", ") || "nepoužívá");
-  art.append(net);
-  return art;
+  body.append(line(f.name, "n"),
+    line([f.instances.join(", "), version && "verze " + version].filter(Boolean).join(" · "), "m"));
+  const net = f.devices.map(deviceName).join(", ");
+  body.append(line("Nasazeno " + fmtTime(f.applied_at) + (net ? " · Síť: " + net : ""), "m"));
+  if (f.files.length) body.append(line(f.files.join(", "), "m mono"));
+  if (f.error) body.append(line(f.error, "m err"));
+  const [label, cls] = FEAT_STATUS[f.status] || [f.status, ""];
+  row.append(body, line(label, "pill " + cls));
+  return row;
 }
 
 function deviceName(address) {
@@ -649,29 +830,9 @@ function deviceName(address) {
 
 function renderFeatures() {
   const list = feats.features;
-  const upd = list.filter((f) => f.status === "update").length;
-  $("tFeat").textContent = list.length;
-  const last = Math.max(0, ...list.map((f) => f.applied_at || 0));
-  $("tFeatSub").textContent = last ? "Poslední Apply " + fmtTime(last)
-    : feats.received_at ? "Homecraft zatím nic nenainstaloval" : "Souhrn pošle Homecraft po připojení";
-  $("tFeatUpd").textContent = upd + (upd >= 1 && upd <= 4 ? " aktualizace" : " aktualizací");
-  $("tFeatUpd").className = "badge " + (upd ? "infob" : "");
-  const tiles = list.map(featTile);
-  if (feats.project_url) {
-    const a = document.createElement("a");
-    a.className = "card feat feat-link";
-    a.href = feats.project_url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    const strong = document.createElement("strong");
-    strong.textContent = "Otevřít projekt v Homecraftu";
-    const sub = document.createElement("span");
-    sub.className = "muted";
-    sub.textContent = "přidání a nastavení features";
-    a.append(strong, sub);
-    tiles.push(a);
-  }
-  $("featTiles").replaceChildren(...tiles);
+  $("featRows").replaceChildren(...list.map(featRow));
+  $("projectLink").hidden = !feats.project_url;
+  if (feats.project_url) $("projectLink").href = feats.project_url;
   $("featEmpty").hidden = list.length > 0;
   $("featEmpty").textContent = feats.received_at ? "Homecraft do tohoto Home Assistantu zatím nic nenainstaloval."
     : "Souhrn pošle Homecraft po připojení a po každém Apply.";
@@ -698,18 +859,20 @@ async function refresh() {
 $("reconnect").onclick = async () => {
   try {
     await call("POST", "api/reconnect");
-    show("connMsg", "Připojuji…");
+    show("reconnectMsg", "Připojuji…");
     setTimeout(refresh, 1500);
-  } catch (e) { show("connMsg", e.message, true); }
+  } catch (e) { show("reconnectMsg", e.message, true); }
 };
 
-$("paused").onchange = async (ev) => {
+// Two switches (Domů, Homecraft a bezpečnost), one setting.
+$("paused").onchange = $("paused2").onchange = async (ev) => {
+  const msg = ev.target.id === "paused" ? "pauseMsg" : "pause2Msg";
   try {
     await call("POST", "api/pause", { paused: ev.target.checked });
-    show("pauseMsg", ev.target.checked ? "Homecraft je pozastaven." : "Homecraft znovu smí provádět operace.");
+    show(msg, ev.target.checked ? "Homecraft je pozastaven." : "Homecraft znovu smí provádět operace.");
   } catch (e) {
     ev.target.checked = !ev.target.checked;
-    show("pauseMsg", e.message, true);
+    show(msg, e.message, true);
   }
   refresh();
 };
@@ -717,7 +880,7 @@ $("paused").onchange = async (ev) => {
 $("errorReports").onchange = async (ev) => {
   try {
     await call("POST", "api/error-reports", { enabled: ev.target.checked });
-    show("errorReportsMsg", ev.target.checked ? "Chybová hlášení se posílají Homecraftu." : "Chybová hlášení se neposílají.");
+    show("errorReportsMsg", ev.target.checked ? "Chyby se posílají technikovi." : "Chyby se neposílají.");
   } catch (e) {
     ev.target.checked = !ev.target.checked;
     show("errorReportsMsg", e.message, true);
@@ -826,8 +989,8 @@ const NET_KINDS = { shelly_gateway: "Brána", shelly: "Shelly", camera: "Kamera"
   router: "Router", other: "Ostatní" };
 const NET_FILTERS = { shelly_gateway: "Brány", shelly: "Shelly", camera: "Kamery", nas: "NAS",
   router: "Routery", other: "Ostatní" };
-const NET_SOURCES = { manual: ["Ručně", "infob"], ha: ["Z HA", "grayb"], scan: ["Nové · jen sken", "warnb"],
-  homecraft: ["Z Homecraftu · uložit pro ping", "warnb"] };
+const NET_SOURCES = { manual: ["Ručně", "info"], ha: ["Z HA", ""], scan: ["Nové · jen sken", "warn"],
+  homecraft: ["Z Homecraftu · uložit pro ping", "warn"] };
 let devices = [];
 let netFilter = "";
 let netEditing = null;  // index in `devices`, -1 = new, null = form closed
@@ -871,7 +1034,7 @@ function renderDevices() {
   $("tNetSub").textContent = Object.keys(NET_KINDS).filter((k) => counts[k])
     .map((k) => counts[k] + "× " + NET_KINDS[k]).join(" · ") || "Zatím žádná zařízení";
   $("tNetNew").textContent = fresh + (fresh === 1 ? " nové" : fresh < 5 && fresh ? " nová" : " nových") + " ze skenu";
-  $("tNetNew").className = "badge " + (fresh ? "warnb" : "");
+  $("tNetNew").className = "pill " + (fresh ? "warn" : "");
   if (netFilter && !counts[netFilter]) netFilter = "";
 
   const chips = [["", "Vše", devices.length], ...Object.keys(NET_FILTERS).filter((k) => counts[k])
@@ -901,7 +1064,7 @@ function renderDevices() {
       const [srcLabel, srcCls] = NET_SOURCES[d.source] || [d.source, ""];
       const src = cell("");
       const badge = document.createElement("span");
-      badge.className = "badge " + srcCls;
+      badge.className = "pill " + srcCls;
       badge.textContent = srcLabel;
       src.append(badge);
       const act = cell("");
@@ -1019,7 +1182,7 @@ function renderCandidates(list = candidates, p = "netImport") {
     name.append(strong, sub);
     const state = cell("");
     const badge = document.createElement("span");
-    badge.className = "badge " + (c.filled ? "on" : c.saved ? "grayb" : "warnb");
+    badge.className = "pill " + (c.filled ? "ok" : c.saved ? "" : "warn");
     badge.textContent = c.filled ? "Doplněno .local" : c.saved ? "Už v seznamu" : "Nové";
     state.append(badge);
     tr.append(pick, name, cell(c.address, "mono"), cell(c.hostname || "—", "mono"), state);
@@ -1102,5 +1265,3 @@ loadDevices().catch((e) => show("netMsg", "Seznam se nepodařilo načíst: " + e
 refresh();
 setInterval(refresh, 5000);
 </script>
-</body>
-</html>
