@@ -382,6 +382,16 @@ async def _save_network_devices(request: web.Request) -> web.Response:
     return web.json_response(stored)
 
 
+async def _network_devices_seen(request: web.Request) -> web.Response:
+    """Confirm new scan finds (the banner's "Vše v pořádku")."""
+    addresses = await _json_field(request, "addresses", object)
+    if addresses != "all" and not (
+        isinstance(addresses, list) and all(isinstance(a, str) for a in addresses)
+    ):
+        raise web.HTTPBadRequest(text='addresses: a list of addresses or "all"')
+    return web.json_response(network_devices.mark_seen(addresses))
+
+
 async def _ha_candidates(request: web.Request) -> web.Response:
     """Network device candidates from HA (#632); read-only, saves nothing."""
     try:
@@ -452,6 +462,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/house", _house)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
+    app.router.add_post("/api/network-devices/seen", _network_devices_seen)
     app.router.add_get("/api/network-devices/ha", _ha_candidates)
     app.router.add_post("/api/network-devices/scan", _scan)
     return app

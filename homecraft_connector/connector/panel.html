@@ -129,8 +129,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .alert svg { flex: none; margin-top: 1px; }
 .alert.warn { background: var(--warn-tint); color: var(--warn); }
 .alert.err { background: var(--bad-tint); color: var(--bad); }
-.alert .grow { flex: 1; min-width: 0; }
 .alert .sb { margin: -4px -6px -4px 0; }
+.alert .grow { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.alert.wrapbtns { flex-wrap: wrap; align-items: center; }
+.dot.s { width: 32px; height: 32px; }
+.row .dot:not(.okd) { background: var(--hfb-card); }
+.row .pill.grey { background: var(--hfb-card); }
+.row .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.row .acts { display: flex; margin-left: auto; }
+.ib { width: 36px; min-height: 36px; padding: 0; background: transparent; box-shadow: none; color: var(--hfb-text-2);
+  border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .verification { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 3px; overflow-wrap: anywhere; }
 .center { align-items: center; text-align: center; }
 .chip { min-height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12px; background: var(--hfb-card); color: var(--hfb-text-2);
@@ -301,26 +309,25 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
 
   <!-- Zařízení v síti -->
   <div data-tab="devices" class="stack" hidden>
-  <section class="card" aria-labelledby="netH">
+  <div class="alert warn wrapbtns" id="netNew" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <div class="grow"><b id="netNewTitle"></b> <span id="netNewText"></span></div>
+    <div class="btns"><button id="netNewShow">Prohlédnout</button><button id="netNewOk">Vše v pořádku</button></div>
+  </div>
+  <section class="card" id="netCard" aria-labelledby="netH">
     <div class="hd">
       <div class="grow">
         <h2 class="t" id="netH">Zařízení v síti</h2>
-        <div class="s">Adresy a odkazy zůstávají v tomto Home Assistantu, bez hesel.</div>
+        <div class="s">Adresy a odkazy zůstávají v tomto Home Assistantu, bez hesel. Homecraft je dostane jen pro funkci, která je potřebuje.</div>
       </div>
       <div class="btns">
         <button class="sf" id="netHa">Načíst z HA</button>
-        <button class="sf" id="netScan">Doporučený sken</button>
-        <button class="primary" id="netAdd">Přidat ručně</button>
+        <button class="sf" id="netScan"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>Najít v síti</button>
+        <button class="primary" id="netAdd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Přidat</button>
       </div>
     </div>
     <div class="chips" id="netFilters"></div>
-    <div class="scroll" id="netTable" hidden>
-      <table>
-        <thead><tr><th>Název</th><th>Typ</th><th>Adresa</th><th>Jméno v síti (.local)</th>
-          <th>Webové rozhraní</th><th>Zdroj</th><th>Používá</th><th></th></tr></thead>
-        <tbody id="netBody"></tbody>
-      </table>
-    </div>
+    <div class="rows" id="netRows"></div>
+    <button class="sf" id="netMore" style="align-self:center" hidden></button>
     <p id="netEmpty" class="help">Zatím žádná zařízení.</p>
     <div id="netMsg" class="msg"></div>
   </section>
@@ -852,7 +859,7 @@ function featRow(f) {
     a.textContent = "Nastavit";
     row.append(a);
   } else if (f.status === "running") {
-    row.append(line("jen přehled", "pill"));
+    row.append(line("jen přehled", "pill grey"));
   }
   return row;
 }
@@ -873,7 +880,7 @@ function renderHouse() {
     const b = low[0];
     $("batteryTitle").textContent = "Slabá baterie " + (b.kind === "window" ? "v okenním čidle " : "v hlavici ")
       + b.name + " (" + num(b.battery) + " %)" + (low.length > 1 ? " a " + (low.length - 1) + " další." : ".");
-    $("batteryText").textContent = "Vyměňte ji co nejdřív.";
+    $("batteryText").textContent = low.length > 1 ? "Vyměňte baterie co nejdřív." : "Vyměňte ji co nejdřív.";
   }
   const winOpen = h ? h.windows_open : 0;
   $("tHeatWin").hidden = !winOpen;
@@ -909,7 +916,8 @@ function renderRemoteAndTech() {
   $("tRemoteSub").className = "meta" + (tailnet ? " mono" : "");
   $("techName").textContent = feats.technician ? feats.technician + " · Homecraft" : "Homecraft";
   const lc = feats.last_change;
-  $("techLast").textContent = lc && lc.at ? fmtTime(lc.at) : "–";
+  $("techLast").textContent = lc && lc.at ? new Date(lc.at * 1000).toLocaleString("cs-CZ",
+    { day: "numeric", month: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
   $("techLastSub").textContent = lc ? [lc.actor !== feats.technician && lc.actor, lc.feature, lc.instance]
     .filter(Boolean).join(" · ") : "Ukáže se po prvním Apply";
 }
@@ -1083,14 +1091,23 @@ $("haTokenDelete").onclick = async () => {
 };
 
 // --- Network devices (#631) ----------------------------------------------
-const NET_KINDS = { shelly_gateway: "Brána", shelly: "Shelly", camera: "Kamera", nas: "NAS",
+const NET_KINDS = { shelly_gateway: "Brána Shelly", shelly: "Shelly", camera: "Kamera", nas: "NAS",
   router: "Router", other: "Ostatní" };
-const NET_FILTERS = { shelly_gateway: "Brány", shelly: "Shelly", camera: "Kamery", nas: "NAS",
-  router: "Routery", other: "Ostatní" };
-const NET_SOURCES = { manual: ["Ručně", "info"], ha: ["Z HA", ""], scan: ["Nové · jen sken", "warn"],
-  homecraft: ["Z Homecraftu · uložit pro ping", "warn"] };
+// Filter chips (design v2): the three kinds features use, the rest under Ostatní.
+const NET_FILTERS = { new: "Nová", shelly_gateway: "Brány Shelly", camera: "Kamery", nas: "NAS", other: "Ostatní" };
+const NET_PAGE = 6;
+const SVG = (size, body) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
+const NET_ICONS = {
+  wifi: SVG(16, '<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5v.01"/>'),
+  camera: SVG(16, '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>'),
+  box: SVG(16, '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+  open: SVG(18, '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
+  edit: SVG(18, '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'),
+};
 let devices = [];
 let netFilter = "";
+let netAll = false;  // "Zobrazit dalších N" pressed
 let netEditing = null;  // index in `devices`, -1 = new, null = form closed
 let netDeleteArmed = null;
 
@@ -1103,36 +1120,96 @@ function cell(text, cls) {
   return td;
 }
 
-function urlCell(urls) {
-  const td = document.createElement("td");
-  td.className = "mono";
-  if (!urls.length) td.textContent = "—";
-  for (const u of urls) {
-    // The add-on allows only http(s)/rtsp(s); a browser opens only http(s).
-    const line = document.createElement("div");
-    const el = /^https?:\/\//i.test(u) ? document.createElement("a") : line;
-    el.textContent = u;
-    if (el !== line) { el.href = u; el.target = "_blank"; el.rel = "noopener noreferrer"; line.append(el); }
-    td.append(line);
-  }
-  return td;
-}
+const isNew = (d) => d.source === "scan" && !d.seen;
+const netGroup = (d) => (d.kind in NET_FILTERS ? d.kind : "other");
 
 function usedBy(d) {
-  const names = feats.features.filter((f) => f.devices.includes(d.address) || (d.hostname && f.devices.includes(d.hostname)))
+  return feats.features.filter((f) => f.devices.includes(d.address) || (d.hostname && f.devices.includes(d.hostname)))
     .map((f) => f.name);
-  return names.length ? cell(names.join(", "), "wrap") : cell("—", "muted");
+}
+
+function pill(text, cls) {
+  const s = document.createElement("span");
+  s.className = "pill " + cls;
+  s.textContent = text;
+  return s;
+}
+
+function deviceRow(d, i) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const used = usedBy(d);
+  const dot = document.createElement("span");
+  dot.className = "dot s" + (used.length ? " okd" : "");
+  dot.innerHTML = d.kind.startsWith("shelly") ? NET_ICONS.wifi : d.kind === "camera" ? NET_ICONS.camera : NET_ICONS.box;
+  const body = document.createElement("div");
+  body.className = "grow";
+  const meta = line(NET_KINDS[d.kind] || d.kind, "m");
+  for (const v of [d.address, d.hostname].filter(Boolean)) meta.append(" · ", Object.assign(document.createElement("span"), { className: "mono", textContent: v }));
+  body.append(line(d.name, "n"), meta);
+  if (d.note) body.append(line(d.note, "m"));
+  const tags = document.createElement("div");
+  tags.className = "tags";
+  if (isNew(d)) tags.append(pill("nové", "warn"));
+  if (d.source === "homecraft") tags.append(pill("Z Homecraftu · uložit pro ping", "warn"));
+  tags.append(...used.map((n) => pill(n, "grey")));
+  const acts = document.createElement("div");
+  acts.className = "acts";
+  // The add-on allows only http(s)/rtsp(s) URLs; a browser opens only http(s).
+  const web = d.urls.find((u) => /^https?:\/\//i.test(u));
+  if (web) {
+    const a = document.createElement("a");
+    a.className = "ib";
+    a.href = web;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.title = web;
+    a.setAttribute("aria-label", "Otevřít " + d.name);
+    a.innerHTML = NET_ICONS.open;
+    acts.append(a);
+  }
+  const edit = document.createElement("button");
+  edit.className = "ib";
+  edit.setAttribute("aria-label", "Upravit " + d.name);
+  edit.innerHTML = NET_ICONS.edit;
+  edit.onclick = () => openDevice(i);
+  acts.append(edit);
+  row.append(dot, body);
+  if (tags.childElementCount) row.append(tags);
+  row.append(acts);
+  return row;
+}
+
+function czCount(n, one, few, many) {
+  return n + " " + (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
+}
+
+function renderNewBanner(fresh) {
+  $("netNew").hidden = !fresh.length;
+  if (!fresh.length) return;
+  const n = fresh.length;
+  $("netNewTitle").textContent = "V síti " + (n >= 2 && n <= 4 ? "jsou " : "je ") +
+    czCount(n, "nové zařízení", "nová zařízení", "nových zařízení");
+  const named = fresh.slice(0, 3).map((d) => d.name + " (" + d.address + ")");
+  if (n > 3) named.push("další " + (n - 3));
+  $("netNewText").textContent = "– " + (named.length > 1 ? named.slice(0, -1).join(", ") + " a " + named.at(-1) : named[0]) + ".";
 }
 
 function renderDevices() {
-  const counts = {};
-  for (const d of devices) counts[d.kind] = (counts[d.kind] || 0) + 1;
-  const fresh = devices.filter((d) => d.source === "scan").length;
+  const counts = { new: 0 };
+  const kinds = {};
+  for (const d of devices) {
+    counts[netGroup(d)] = (counts[netGroup(d)] || 0) + 1;
+    kinds[d.kind] = (kinds[d.kind] || 0) + 1;
+    if (isNew(d)) counts.new += 1;
+  }
+  const fresh = devices.filter(isNew);
   $("tNet").textContent = devices.length;
-  $("tNetSub").textContent = Object.keys(NET_KINDS).filter((k) => counts[k])
-    .map((k) => counts[k] + "× " + NET_KINDS[k]).join(" · ") || "Zatím žádná zařízení";
-  $("tNetNew").textContent = fresh + (fresh === 1 ? " nové" : fresh < 5 && fresh ? " nová" : " nových") + " ze skenu";
-  $("tNetNew").className = "pill " + (fresh ? "warn" : "");
+  $("tNetSub").textContent = Object.keys(NET_KINDS).filter((k) => kinds[k])
+    .map((k) => kinds[k] + "× " + NET_KINDS[k]).join(" · ") || "Zatím žádná zařízení";
+  $("tNetNew").textContent = czCount(fresh.length, "nové", "nová", "nových") + " ze skenu";
+  $("tNetNew").className = "pill " + (fresh.length ? "warn" : "");
+  renderNewBanner(fresh);
   if (netFilter && !counts[netFilter]) netFilter = "";
 
   const chips = [["", "Vše", devices.length], ...Object.keys(NET_FILTERS).filter((k) => counts[k])
@@ -1142,41 +1219,35 @@ function renderDevices() {
     b.className = "chip";
     b.textContent = label + " " + n;
     b.setAttribute("aria-pressed", String(k === netFilter));
-    b.onclick = () => { netFilter = k; renderDevices(); };
+    b.onclick = () => { netFilter = k; netAll = false; renderDevices(); };
     return b;
   }));
 
-  $("netBody").replaceChildren(...devices.map((d, i) => [d, i])
-    .filter(([d]) => !netFilter || d.kind === netFilter).map(([d, i]) => {
-      const tr = document.createElement("tr");
-      const name = cell("", "wrap name");
-      const strong = document.createElement("strong");
-      strong.textContent = d.name;
-      name.append(strong);
-      if (d.note) {
-        const note = document.createElement("div");
-        note.className = "muted";
-        note.textContent = d.note;
-        name.append(note);
-      }
-      const [srcLabel, srcCls] = NET_SOURCES[d.source] || [d.source, ""];
-      const src = cell("");
-      const badge = document.createElement("span");
-      badge.className = "pill " + srcCls;
-      badge.textContent = srcLabel;
-      src.append(badge);
-      const act = cell("");
-      const b = document.createElement("button");
-      b.textContent = "Upravit";
-      b.onclick = () => openDevice(i);
-      act.append(b);
-      tr.append(name, cell(NET_KINDS[d.kind] || d.kind), cell(d.address, "mono"),
-        cell(d.hostname || "—", "mono"), urlCell(d.urls), src, usedBy(d), act);
-      return tr;
-    }));
-  $("netTable").hidden = devices.length === 0;
+  const shown = devices.map((d, i) => [d, i])
+    .filter(([d]) => !netFilter || (netFilter === "new" ? isNew(d) : netGroup(d) === netFilter));
+  const rest = netAll ? 0 : Math.max(0, shown.length - NET_PAGE);
+  $("netRows").replaceChildren(...shown.slice(0, shown.length - rest).map(([d, i]) => deviceRow(d, i)));
+  $("netMore").hidden = !rest;
+  $("netMore").textContent = "Zobrazit dalších " + rest;
   $("netEmpty").hidden = devices.length > 0;
 }
+
+$("netMore").onclick = () => { netAll = true; renderDevices(); };
+$("netNewShow").onclick = () => {
+  netFilter = "new";
+  netAll = false;
+  renderDevices();
+  $("netCard").scrollIntoView({ block: "start" });
+};
+$("netNewOk").onclick = async () => {
+  try {
+    devices = await call("POST", "api/network-devices/seen", { addresses: "all" });
+    show("netMsg", "Nová zařízení potvrzena.");
+  } catch (e) {
+    show("netMsg", "Potvrzení se nepovedlo: " + e.message, true);
+  }
+  renderDevices();
+};
 
 async function loadDevices() {
   devices = await call("GET", "api/network-devices");

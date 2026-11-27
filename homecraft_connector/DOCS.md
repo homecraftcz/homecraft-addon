@@ -65,13 +65,29 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
 `#security`; staré odkazy `#overview` a `#features` vedou na **Domů**,
 `#network` na **Zařízení v síti** a `#audit` na **Homecraft a bezpečnost**):
 
-- **Domů**: dlaždice Spojení, Co máte od Homecraftu (počet features, poslední
-  Apply, čekající aktualizace), Zařízení v síti, Co Homecraft dělal (operace
-  za 24 h a odmítnuté) a Zabezpečení (chybějící tokeny, odkaz otevře **Pro
-  technika**); při odpojení banner **Homecraft teď nemůže do domu** (bez
+- **Domů**: při odpojení banner **Homecraft teď nemůže do domu** (bez
   přístupového tokenu místo něj nápověda k jeho zadání, během žádosti
-  o spárování k porovnání ověřovacího kódu); seznam **Co máte od Homecraftu**;
-  **Pozastavit Homecraft**; **Aktualizace**, jen když nějaká čeká.
+  o spárování k porovnání ověřovacího kódu); banner **Slabá baterie v hlavici
+  … (N %)** s tlačítkem **Ukázat** (záložka Topení). Tři dlaždice:
+  - **Topení**: počet okruhů, hlavic a oken, kolik hlavic právě topí, které
+    okruhy topí a které jsou v útlumu, venkovní teplota (ze zdroje topení,
+    `input_text.heating_outdoor_temperature_source`, jinak
+    `weather.forecast_domov`; bez hodnoty se vynechá), slabé baterie
+    a otevřená okna. Stav čte doplněk živě z Home Assistantu (jen čte, každých
+    30 s). Hlavice a okna okruhů posílá Homecraft v souhrnu features
+    (homecraftcz/homecraft#945); bez něj dlaždice ukáže jen „Topení nastavuje
+    technik“. Slabá baterie = senzor baterie (`device_class: battery`) na
+    stejném zařízení jako hlavice nebo okenní čidlo, pod hranicí
+    `input_number.heating_low_battery_threshold` (bez ní 30 %);
+  - **Vzdálený přístup**: zapnuto (je nainstalovaná feature Tailscale, s jménem
+    tailnetu) nebo vypnuto (případně kdy majitel požádal o zapnutí);
+  - **Zařízení v síti**: počet, druhy a nová zařízení ze skenu.
+
+  Dále seznam **Co máte od Homecraftu** (verze, stav; u topení a vzdáleného
+  přístupu **Nastavit**, ostatní „jen přehled“), karta **Váš technik** (kdo
+  naposledy spustil Apply, poslední změna, operace za 24 h a odmítnuté, odkaz
+  **Co Homecraft dělal**), **Pozastavit Homecraft** a **Aktualizace**, jen
+  když nějaká čeká.
 - **Topení** a **Vzdálený přístup**: zatím „Připravujeme“.
 - **Zařízení v síti**: seznam síťových zařízení, viz níže.
 - **Homecraft a bezpečnost**: spárování (jen během žádosti o spárování),
@@ -131,17 +147,26 @@ a dlaždice jdou pod sebe. Panel má světlý i tmavý vzhled podle systému.
   novější), čas posledního Apply, stav **běží** / **aktualizace čeká na
   technika** / **chyba doplňku** (s hláškou),
   soubory (`packages/hfb_*.yaml`) a síťová zařízení, která používá (ta jsou
-  i ve sloupci **Používá** záložky **Zařízení v síti**). Odkaz **Otevřít projekt
+  i jako odznak u zařízení v záložce **Zařízení v síti**). Odkaz **Otevřít projekt
   v Homecraftu** pošle Homecraft (jen `http`/`https`). Souhrn posílá Homecraft
   po každém Apply a po připojení (operace `features.report`, i během pauzy:
   týká se jen panelu, ne Home Assistantu; v auditu **Features (počet)**).
   Doplněk ho uloží do `/data/features.json` (nejvýš 100 features, delší texty
   odmítne) a panel ho čte při každém načtení.
 - **Zařízení v síti**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
-  v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
-  typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru
+  v síti `*.local`, MAC, webové rozhraní a streamy, poznámka). Řádek ukazuje
+  název, typ, IP a jméno v síti, odznak feature, která zařízení používá, ikonu
+  pro otevření webového rozhraní a tlačítko pro úpravu; prvních 6 řádků,
+  zbytek pod **Zobrazit dalších N**. Filtry s počty: Vše, Nová, Brány Shelly,
+  Kamery, NAS a Ostatní. **Přidat** otevře formulář. Zařízení přidané
+  ze skenu je **nové** (odznak „nové“), dokud ho někdo nepotvrdí: nad
+  seznamem je banner „V síti jsou N nová zařízení – …“ s tlačítky
+  **Prohlédnout** (ukáže jen nová) a **Vše v pořádku** (potvrdí všechna;
+  potvrzení se uloží jako `seen` a přežije restart). Zařízení z dřívějších
+  verzí bez `seen` se berou jako potvrzená, kromě těch ze skenu.
+  **Načíst z HA** nabídne zařízení z registru
   HA a z jeho objevování v síti (DHCP, zeroconf, SSDP); už uložená (stejná IP
-  nebo MAC) jsou označená a nepřidají se znovu. **Doporučený sken** projde
+  nebo MAC) jsou označená a nepřidají se znovu. **Najít v síti** (doporučený sken) projde
   podsíť domácnosti (z Supervisoru `/network/info`; jen soukromá IPv4 nejvýš
   /22) podle profilů Shelly (`/shelly`, jméno `<id>.local`), Kamery (RTSP 554,
   ONVIF 80/8000), NAS (Synology 5000/5001, SMB 445) a Ostatní web (80/443,
