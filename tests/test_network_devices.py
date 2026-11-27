@@ -29,6 +29,7 @@ def test_normalizes_a_device():
         "mac": "A8:03:2A:B1:C2:D4",
         "note": "půda",
         "source": "manual",
+        "seen": True,
     }
     [d] = network_devices.validate([{"name": "NAS", "address": "nas", "mac": ""}])
     assert d["kind"] == "other" and d["urls"] == [] and d["mac"] is None and d["hostname"] == ""
@@ -56,6 +57,7 @@ def test_normalizes_a_device():
         {"source": "cloud"},
         {"note": "x" * 1001},
         {"name": 5},
+        {"seen": "yes"},
     ],
 )
 def test_rejects(change):
@@ -112,3 +114,43 @@ def test_hosts_are_the_stored_addresses_and_names():
         ]
     )
     assert network_devices.hosts() == {"10.0.0.2", "mesh.local", "nas.lan"}
+
+
+SCAN = {"name": "Shelly", "kind": "shelly", "address": "10.0.0.48", "source": "scan"}
+
+
+def test_old_file_without_seen(data_dir):
+    """Before `seen`: scan finds are new, everything else counts as confirmed."""
+    (data_dir / "network_devices.json").write_text(
+        '[{"name": "NAS", "address": "10.0.0.5", "source": "ha"},'
+        ' {"name": "Shelly", "address": "10.0.0.48", "source": "scan"}]'
+    )
+    assert [d["seen"] for d in network_devices.load()] == [True, False]
+
+
+def test_mark_seen(data_dir):
+    network_devices.save([SCAN, {**SCAN, "address": "10.0.0.61"}, GATEWAY])
+    stored = network_devices.mark_seen(["10.0.0.48"])
+    assert [d["seen"] for d in stored] == [True, False, True]
+    assert network_devices.load() == stored
+    assert [d["seen"] for d in network_devices.mark_seen("all")] == [True, True, True]
+
+
+def test_import_does_not_confirm_a_scan_find(data_dir):
+    network_devices.save([SCAN])
+    network_devices.import_devices([{"name": "Shelly", "address": "10.0.0.48", "note": "x"}])
+    [d] = network_devices.load()
+    assert (d["note"], d["seen"]) == ("x", False)
+
+
+def test_panel_seen_api(run_panel):
+    network_devices.save([SCAN, {**SCAN, "address": "10.0.0.61"}])
+
+    async def scenario(http):
+        url = "/api/network-devices/seen"
+        no_csrf = (await http.post(url, json={"addresses": "all"})).status
+        bad = (await http.post(url, json={"addresses": "some"}, headers=CSRF)).status
+        one = await (await http.post(url, json={"addresses": ["10.0.0.61"]}, headers=CSRF)).json()
+        return no_csrf, bad, [d["seen"] for d in one]
+
+    assert run_panel(scenario) == (403, 400, [False, True])
