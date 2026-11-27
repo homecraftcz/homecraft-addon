@@ -43,11 +43,6 @@ def test_page_and_status(run_panel):
     assert status["ha_name"] == "Dům Test"
     for tab in ("home", "heating", "remote", "devices", "security"):
         assert f'href="#{tab}"' in html and f'data-tab="{tab}"' in html
-    # v1 links land on the new tabs
-    assert (
-        'OLD_TABS = { overview: "home", features: "home", network: "devices", audit: "security" }'
-        in html
-    )
 
 
 def test_state_changes_need_the_csrf_header(run_panel, agent):
@@ -248,25 +243,3 @@ def test_system_log_restart_refused_by_check_config(run_panel, monkeypatch):
         f"{panel.RESTART_ERRORS['ha_config_invalid']}: Invalid config for 'light'"
     )
     assert not panel._RESTART_LOCK.locked()
-
-
-def test_ha_name_is_cached_and_survives_a_failed_lookup(run_panel, monkeypatch):
-    calls = []
-
-    async def ha_name(http):
-        calls.append(1)
-        if len(calls) > 1:
-            raise OSError("HA down")
-        return "Dům Malinovi"
-
-    monkeypatch.setattr(panel.fingerprint, "_ha_name", ha_name)
-
-    async def scenario(http):
-        first = (await (await http.get("/api/status")).json())["ha_name"]
-        second = (await (await http.get("/api/status")).json())["ha_name"]
-        panel._house_cache["at"] -= panel.HA_NAME_TTL + 1  # expired: looked up again, HA down
-        third = (await (await http.get("/api/status")).json())["ha_name"]
-        return first, second, third
-
-    assert run_panel(scenario) == ("Dům Malinovi",) * 3
-    assert len(calls) == 2

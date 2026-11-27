@@ -65,9 +65,12 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
 `#security`; staré odkazy `#overview` a `#features` vedou na **Domů**,
 `#network` na **Zařízení v síti** a `#audit` na **Homecraft a bezpečnost**):
 
-- **Domů**: dlaždice Spojení, Zařízení v síti, Co Homecraft dělal (operace
-  za 24 h a odmítnuté) a Zabezpečení (chybějící tokeny); při odpojení banner
-  **Homecraft teď nemůže do domu**; seznam **Co máte od Homecraftu**;
+- **Domů**: dlaždice Spojení, Co máte od Homecraftu (počet features, poslední
+  Apply, čekající aktualizace), Zařízení v síti, Co Homecraft dělal (operace
+  za 24 h a odmítnuté) a Zabezpečení (chybějící tokeny, odkaz otevře **Pro
+  technika**); při odpojení banner **Homecraft teď nemůže do domu** (bez
+  přístupového tokenu místo něj nápověda k jeho zadání, během žádosti
+  o spárování k porovnání ověřovacího kódu); seznam **Co máte od Homecraftu**;
   **Pozastavit Homecraft**; **Aktualizace**, jen když nějaká čeká.
 - **Topení** a **Vzdálený přístup**: zatím „Připravujeme“.
 - **Zařízení v síti**: seznam síťových zařízení, viz níže.
@@ -75,7 +78,8 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   **Co Homecraft dělal**, **Spojení s Homecraftem** (stav, online od,
   ověřovací kód, pauza, **Posílat chyby technikovi**) a sbalená sekce
   **Pro technika** (přístupový token, token správce HA, server s **Připojit
-  znovu**, párovací kód, verze doplňku).
+  znovu**, párovací kód, verze doplňku). Chybí-li přístupový token nebo token
+  správce HA, sekce **Pro technika** se po otevření panelu rozbalí sama.
 
 Na šířce telefonu zůstanou v záložkách jen ikony (u otevřené i název)
 a dlaždice jdou pod sebe. Panel má světlý i tmavý vzhled podle systému.

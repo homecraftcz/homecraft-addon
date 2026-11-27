@@ -95,21 +95,28 @@ async def _page(request: web.Request) -> web.Response:
 # every HA_NAME_TTL seconds, so a rename shows without an add-on restart.
 HA_NAME_TTL = 600.0
 HA_NAME_RETRY = 60.0  # after a failed lookup
-_house_cache: dict = {"value": None, "at": None}
+_house_cache: dict = {"value": None, "at": None, "task": None}
 
 
-async def _house_name() -> str | None:
-    """HA down or slow: the last known name (None at first), the status never waits long."""
-    now = time.monotonic()
-    if _house_cache["at"] is None or now - _house_cache["at"] > HA_NAME_TTL:
-        _house_cache["at"] = now
-        try:
-            async with aiohttp.ClientSession(timeout=selfcheck.TIMEOUT) as http:
-                name = await asyncio.wait_for(fingerprint._ha_name(http), 2)
-            _house_cache["value"] = name or _house_cache["value"]
-        except Exception as e:
-            _house_cache["at"] = now - HA_NAME_TTL + HA_NAME_RETRY
-            logger.debug("Název domu zatím nezjištěn: %s", type(e).__name__)
+async def _lookup_house_name() -> None:
+    """Records the time once the result is in: a failure is retried after HA_NAME_RETRY."""
+    try:
+        async with aiohttp.ClientSession(timeout=selfcheck.TIMEOUT) as http:
+            name = await asyncio.wait_for(fingerprint._ha_name(http), fingerprint.LOOKUP_TIMEOUT)
+        _house_cache["value"] = name or _house_cache["value"]
+        _house_cache["at"] = time.monotonic()
+    except Exception as e:
+        _house_cache["at"] = time.monotonic() - HA_NAME_TTL + HA_NAME_RETRY
+        logger.debug("Název domu zatím nezjištěn: %s", type(e).__name__)
+
+
+def _house_name() -> str | None:
+    """The cached name at once (None until the first lookup ends); a stale one is
+    refreshed in the background, so the status never waits for HA."""
+    at, task = _house_cache["at"], _house_cache["task"]
+    stale = at is None or time.monotonic() - at > HA_NAME_TTL
+    if stale and (task is None or task.done()):
+        _house_cache["task"] = asyncio.create_task(_lookup_house_name())
     return _house_cache["value"]
 
 
@@ -117,7 +124,7 @@ async def _status(request: web.Request) -> web.Response:
     client = request.app[CLIENT]
     return web.json_response(
         {
-            "ha_name": await _house_name(),
+            "ha_name": _house_name(),
             "connected": client.connected,
             "server_url": client.server_url,
             "version": client.version,

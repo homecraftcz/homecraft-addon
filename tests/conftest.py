@@ -1,12 +1,13 @@
 import asyncio
 import base64
+import time
 import uuid
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from connector import audit, fingerprint, panel, policy, settings
+from connector import audit, panel, policy, settings
 from connector.client import Client
 
 
@@ -36,12 +37,9 @@ def run_panel(agent, monkeypatch):
     """Run `scenario(http)` against the panel, its requests coming from the
     ingress proxy (the test client is 127.0.0.1) unless `from_ingress=False`."""
 
-    async def ha_name(http):
-        return "Dům Test"
-
-    # No HA in tests: the header's house name comes from this stub, looked up afresh.
-    monkeypatch.setattr(fingerprint, "_ha_name", ha_name)
-    monkeypatch.setattr(panel, "_house_cache", {"value": None, "at": None})
+    # No HA in tests: a fresh cached house name, so no lookup starts.
+    cache = {"value": "Dům Test", "at": time.monotonic(), "task": None}
+    monkeypatch.setattr(panel, "_house_cache", cache)
 
     def run(scenario, from_ingress=True):
         monkeypatch.setattr(settings, "DEV", False)

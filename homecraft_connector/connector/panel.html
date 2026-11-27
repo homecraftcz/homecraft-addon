@@ -72,7 +72,7 @@ h2 { margin: 0; }
 .dot.run { background: var(--hfb-run-dot); color: #fff; }
 .dot.okd { background: var(--hfb-ok-dot); color: #fff; }
 .grid { display: grid; gap: 16px; }
-.tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.tiles { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
 .home { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
 .ft { text-decoration: none; color: inherit; gap: 10px; }
@@ -212,14 +212,19 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
   <!-- Domů -->
   <div data-tab="home" class="stack">
     <div class="alert warn" id="offlineBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4z"/><path d="M12 10v4M12 17.5v.01"/></svg>
-      <div><b>Homecraft teď nemůže do domu.</b> Topení, kamery i automatizace běží dál normálně, jen změny
-        z Homecraftu počkají, až bude zase připojený.</div></div>
+      <div><b id="bannerTitle"></b> <span id="bannerText"></span></div></div>
 
     <div class="grid tiles">
       <a class="card ft" href="#security">
         <div class="hd"><span class="dot" id="tConnDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
           <div class="grow"><div class="t">Spojení</div><div class="s">s Homecraftem</div></div></div>
         <div><div class="big" id="tConn">–</div><div class="meta" id="tConnSub"></div></div>
+      </a>
+      <a class="card ft" href="#home" id="tFeatLink">
+        <div class="hd"><span class="dot run"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg></span>
+          <div class="grow"><div class="t">Co máte od Homecraftu</div><div class="s">features</div></div></div>
+        <div><div class="big" id="tFeat">–</div><div class="meta" id="tFeatSub"></div></div>
+        <div class="foot"><span class="pill" id="tFeatUpd">0 aktualizací</span></div>
       </a>
       <a class="card ft" href="#devices">
         <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
@@ -232,7 +237,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
           <div class="grow"><div class="t">Co Homecraft dělal</div><div class="s">za posledních 24 h</div></div></div>
         <div><div class="big" id="tAudit">–</div><div class="meta" id="tAuditSub"></div></div>
       </a>
-      <a class="card ft" href="#security">
+      <a class="card ft" href="#security" id="tSecLink">
         <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"/></svg></span>
           <div class="grow"><div class="t">Zabezpečení</div><div class="s">tokeny doplňku</div></div></div>
         <div><div class="big" id="tSec" style="font-size:18px">–</div><div class="meta" id="tSecSub"></div></div>
@@ -240,7 +245,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
     </div>
 
     <div class="grid home">
-      <section class="card" aria-labelledby="featH">
+      <section class="card" id="featCard" aria-labelledby="featH">
         <div class="hd">
           <div class="grow"><h2 class="t" id="featH">Co máte od Homecraftu</h2>
             <div class="s">Nastavuje technik v Homecraftu, tady je jen přehled.</div></div>
@@ -449,7 +454,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
           </div>
         </section>
 
-        <details class="adv">
+        <details class="adv" id="tech">
           <summary><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Pro technika</summary>
           <div class="rows">
             <div class="row"><div class="grow">
@@ -520,6 +525,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
 const $ = (id) => document.getElementById(id);
 const NONCE = "{{NONCE}}";
 let editingToken = false;
+let techOpened = false;
 let deleteArmed = null;
 
 async function call(method, path, body) {
@@ -601,6 +607,18 @@ async function refreshStatus() {
   $("headConnShort").textContent = s.paused ? "Pozastaveno" : s.connected ? "Připojeno" : "Nedostupný";
   $("headConn").className = "pill dotted " + connCls;
   $("offlineBanner").hidden = s.connected;
+  const [title, text] = !s.token_set
+    ? ["Doplněk ještě není připojený k Homecraftu.",
+      "Technik vloží přístupový token v záložce Homecraft a bezpečnost → Pro technika."]
+    : s.pending_approval
+      ? ["Čeká se na spárování.",
+        "Porovnejte s technikem ověřovací kód v záložce Homecraft a bezpečnost."]
+      : ["Homecraft teď nemůže do domu.", "Topení, kamery i automatizace běží dál normálně, " +
+        "jen změny z Homecraftu počkají, až bude zase připojený."];
+  $("bannerTitle").textContent = title;
+  $("bannerText").textContent = text;
+  // Missing tokens: the technician's settings open by themselves (once per page load).
+  if ((!s.token_set || !s.ha_token_set) && !techOpened) $("tech").open = techOpened = true;
   $("server").textContent = s.server_url;
   $("lastConnected").textContent = fmtTime(s.last_connected);
   $("lastError").textContent = s.last_error || "–";
@@ -830,6 +848,13 @@ function deviceName(address) {
 
 function renderFeatures() {
   const list = feats.features;
+  const upd = list.filter((f) => f.status === "update").length;
+  $("tFeat").textContent = list.length;
+  const last = Math.max(0, ...list.map((f) => f.applied_at || 0));
+  $("tFeatSub").textContent = last ? "Poslední Apply " + fmtTime(last)
+    : feats.received_at ? "Homecraft zatím nic nenainstaloval" : "Souhrn pošle Homecraft po připojení";
+  $("tFeatUpd").textContent = upd + (upd >= 1 && upd <= 4 ? " aktualizace" : " aktualizací") + " čeká";
+  $("tFeatUpd").className = "pill " + (upd ? "warn" : "");
   $("featRows").replaceChildren(...list.map(featRow));
   $("projectLink").hidden = !feats.project_url;
   if (feats.project_url) $("projectLink").href = feats.project_url;
@@ -851,6 +876,7 @@ async function refreshFeatures() {
 async function refresh() {
   try {
     await Promise.all([refreshStatus(), refreshAudit(), refreshUpdates(), refreshFeatures()]);
+    show("connMsg", "");
   } catch (e) {
     show("connMsg", "Panel se nepodařilo načíst: " + e.message, true);
   }
@@ -866,15 +892,25 @@ $("reconnect").onclick = async () => {
 
 // Two switches (Domů, Homecraft a bezpečnost), one setting.
 $("paused").onchange = $("paused2").onchange = async (ev) => {
-  const msg = ev.target.id === "paused" ? "pauseMsg" : "pause2Msg";
+  const both = (text, isError) => { show("pauseMsg", text, isError); show("pause2Msg", text, isError); };
   try {
     await call("POST", "api/pause", { paused: ev.target.checked });
-    show(msg, ev.target.checked ? "Homecraft je pozastaven." : "Homecraft znovu smí provádět operace.");
+    both(ev.target.checked ? "Homecraft je pozastaven." : "Homecraft znovu smí provádět operace.");
   } catch (e) {
     ev.target.checked = !ev.target.checked;
-    show(msg, e.message, true);
+    both(e.message, true);
   }
   refresh();
+};
+
+// Tiles that point inside a tab: switch tab, then open / scroll to the section.
+$("tSecLink").onclick = () => {
+  $("tech").open = true;
+  setTimeout(() => $("tech").scrollIntoView({ block: "start" }), 0);
+};
+$("tFeatLink").onclick = (ev) => {
+  ev.preventDefault();
+  $("featCard").scrollIntoView({ block: "start" });
 };
 
 $("errorReports").onchange = async (ev) => {
