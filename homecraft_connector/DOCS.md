@@ -140,7 +140,38 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   **Co dělá technik**: hlavice, okna a čidla, místnosti, kotel
   a rozvrhy (rozvrhy, programy a teploty mění majitel na kartě topení v HA).
   Stav se čte živě z HA, když je záložka otevřená (každých 30 s).
-- **Vzdálený přístup**: zatím „Připravujeme“.
+- **Vzdálený přístup** (Tailscale): zapnutý je, když má projekt v Homecraftu
+  feature Tailscale a v HA je nainstalovaný doplněk Tailscale.
+  - **Zapnuto**: adresa domu `https://<název HA v Tailscale>.<tailnet>`
+    s **Kopírovat adresu** (když HA kopírování nedovolí, panel adresu označí
+    k Ctrl+C). **Aktuální nastavení**, každý řádek jen se známou hodnotou:
+    tailnet (z nastavení feature v Homecraftu), název HA v Tailscale (volba
+    `hostname` doplňku, jinak název hostitele HA, jinak `homeassistant`),
+    verze a stav doplňku (ze Supervisoru), HTTPS certifikát „Platí do …“
+    (doplněk zkusí TLS spojení na adresu domu, nejvýš 3 s, výsledek si
+    pamatuje hodinu; když spojení nejde, řádek se skryje), **Kamery zvenku**
+    (jen s feature go2rtc: rychlé přes WebRTC, když má doplněk Tailscale
+    vypnutý userspace networking) a **Přístup i k zařízením doma** (vypnuto,
+    nebo rozsah sítě). **Zkontrolovat** načte stav znovu. Návod **Přidat
+    další zařízení** pro iPhone/iPad, Android, Windows a Mac: instalace
+    Tailscale, přihlášení stejným účtem, vypnutí expirace klíče (odkaz do
+    admin konzole Tailscale), adresa do aplikace Home Assistant s QR kódem
+    (telefony) nebo do prohlížeče (počítače) a automatické připojení (VPN
+    On Demand, Trvalá VPN, spuštění po přihlášení). Pozvání člena rodiny
+    s vlastním účtem je ve sbalené sekci.
+  - **Vypnuto**: vysvětlení (co potřebujete, co se nainstaluje, jak dlouho)
+    a **Požádat technika o zapnutí**: doplněk pošle Homecraftu
+    `remote_access.request` (homecraftcz/homecraft#947, audit
+    `remote_access.request`), technik žádost uvidí u projektu. Pak panel
+    ukáže „Žádost odeslána <datum>“ (podle `remote_access_requested_at`
+    v souhrnu od Homecraftu); opakovaná žádost do 24 h vrátí čas té první.
+    Offline nebo při pauze se žádost nepošle a panel řekne proč.
+
+  Panel nic nezapíná a nastavení Tailscale nemění (to dělá technik
+  v Homecraftu). Doplněk nevolá Tailscale API a nemá žádné klíče Tailscale,
+  proto nevidí expiraci klíče ani seznam zařízení v tailnetu. QR kód kreslí
+  doplněk sám (`GET /api/remote/qr.svg`, knihovna `segno`), nic se nenačítá
+  zvenku.
 - **Zařízení v síti**: seznam síťových zařízení, viz níže.
 - **Homecraft a bezpečnost**: spárování (jen během žádosti o spárování),
   **Co Homecraft dělal**, **Spojení s Homecraftem** (stav, online od,

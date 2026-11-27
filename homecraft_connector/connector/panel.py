@@ -4,7 +4,8 @@ with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices
 with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636),
 the live heating on Domů (#47, read only) and Topení (#48: read, plus the
 five helpers of a circuit the owner sets; #49: names and window valves saved
-through Homecraft's heating.save).
+through Homecraft's heating.save) and Vzdálený přístup (#50: Tailscale's state,
+a QR code of the house address, the owner's remote_access.request).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -38,6 +39,7 @@ from . import (
     network_discovery,
     network_scan,
     policy,
+    remote,
     selfcheck,
     settings,
     state,
@@ -514,7 +516,8 @@ SAVE_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "inva
 async def _heating_save(request: web.Request) -> web.Response:
     """Topení › Uložit (#49): the owner's names and window valves go to Homecraft
     as heating.save, which saves the circuit and applies heating (or refuses).
-    The only Homecraft request the panel can make; nothing is changed here."""
+    One of the two Homecraft requests the panel makes (with remote_access.request);
+    nothing is changed here."""
     try:
         body = await request.json()
     except ValueError:
@@ -542,6 +545,47 @@ async def _heating_save(request: web.Request) -> web.Response:
     status = result.get("status") if isinstance(result, dict) else None
     logger.info("Topení %s uloženo z panelu (%s)", instance, status)
     return web.json_response({"ok": True, "status": status})
+
+
+async def _remote(request: web.Request) -> web.Response:
+    """Vzdálený přístup (#50): Tailscale's state; read only."""
+    return web.json_response(await remote.status())
+
+
+async def _remote_qr(request: web.Request) -> web.Response:
+    """The house address as a QR code for `<img>` (the CSP's img-src 'self')."""
+    url = (await remote.status())["url"]
+    if not url:
+        raise web.HTTPNotFound()
+    return web.Response(text=remote.qr_svg(url), content_type="image/svg+xml")
+
+
+REQUEST_ERRORS = {
+    "offline": "Homecraft není připojený, žádost teď nejde odeslat.",
+    "paused": "Homecraft je pozastavený, žádost teď nejde odeslat.",
+    "unknown": "Spojení se přerušilo, nevíme, jestli žádost dorazila – zkuste to za chvíli.",
+    "unknown_op": "Tahle verze Homecraftu žádost z panelu neumí.",
+    "not_paired": "Doplněk není spárovaný s Homecraftem.",
+    "busy": "Homecraft je zaneprázdněný, zkuste to za chvíli.",
+}
+
+
+async def _remote_request(request: web.Request) -> web.Response:
+    """Požádat technika o zapnutí (#50): remote_access.request to Homecraft
+    (homecraftcz/homecraft#947), which records it for the technician (once in
+    24 h). Nothing is switched on here or by Homecraft."""
+    try:
+        result = await request.app[CLIENT].ask("remote_access.request", {"note": None})
+    except AskError as e:
+        audit.record("remote_access.request", "tailscale", False, e.code)
+        logger.warning("Žádost o vzdálený přístup selhala: %s", e.code)
+        message = REQUEST_ERRORS.get(e.code) or f"Žádost se nepovedla ({e.code})."
+        status = 409 if e.code in ("offline", "paused") else 502
+        return web.json_response({"ok": False, "code": e.code, "error": message}, status=status)
+    audit.record("remote_access.request", "tailscale", True)
+    logger.info("Majitel požádal o vzdálený přístup z panelu")
+    at = result.get("requested_at") if isinstance(result, dict) else None
+    return web.json_response({"ok": True, "requested_at": features._unix(at)})
 
 
 async def _network_devices(request: web.Request) -> web.Response:
@@ -642,6 +686,9 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/heating", _heating)
     app.router.add_post("/api/heating/helper", _heating_helper)
     app.router.add_post("/api/heating/save", _heating_save)
+    app.router.add_get("/api/remote", _remote)
+    app.router.add_get("/api/remote/qr.svg", _remote_qr)
+    app.router.add_post("/api/remote/request", _remote_request)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_post("/api/network-devices/seen", _network_devices_seen)
