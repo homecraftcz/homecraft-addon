@@ -2,6 +2,15 @@
 
 ## Nevydáno
 
+- Služba Browser Mod `browser_mod.javascript` spouští libovolný JavaScript ve
+  všech prohlížečích registrovaných v Browser Mod, i v prohlížeči admina.
+  Doplněk ji teď odmítne (`refused_content`) v automatizacích, skriptech,
+  balíčcích, dashboardech (i jako `fire-dom-event` a se šablonou v názvu
+  služby) a v Node-RED (#24). Ostatní služby Browser Mod projdou. Vlastní
+  obsah uživatele, který už v HA je, Homecraft dál neblokuje. Topení ji
+  používalo jen ve vzhledu Mushroom, ten heating 1.21.0-beta.1 zrušil.
+  Starší verze topení se vzhledem Mushroom nový okruh nezapíše,
+  aktualizujte topení.
 - Nový vzhled panelu pro majitele domu ve stylu Homecraft (světlý i tmavý,
   použitelný i na telefonu, homecraftcz/homecraft-addon#45). V hlavičce je
   název domu (název Home Assistantu) a stav spojení.
