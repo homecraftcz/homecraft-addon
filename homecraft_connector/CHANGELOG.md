@@ -6,8 +6,7 @@
   použitelný i na telefonu, homecraftcz/homecraft-addon#45). V hlavičce je
   název domu (název Home Assistantu) a stav spojení.
 - Pět záložek: **Domů**, **Topení**, **Vzdálený přístup**, **Zařízení v síti**
-  a **Homecraft a bezpečnost**. Vzdálený přístup zatím ukazuje
-  „Připravujeme“. Staré odkazy (`#overview`, `#features`, `#network`, `#audit`)
+  a **Homecraft a bezpečnost**. Staré odkazy (`#overview`, `#features`, `#network`, `#audit`)
   vedou na nové záložky.
 - **Domů**: dlaždice, banner při odpojení, **Co máte od Homecraftu** (dřív
   záložka Features), pauza a aktualizace karet, když nějaká čeká.
@@ -57,6 +56,19 @@
   (`{op, rid}` → `{op: "reply", rid, ok, …}`, homecraftcz/homecraft#944;
   při pauze nebo bez spojení se nepošle; odpojení po odeslání nebo vypršení
   limitu – u uložení topení 5 minut – znamená „nevíme, jestli se to stalo“).
+- **Vzdálený přístup** podle designu v3 (homecraftcz/homecraft-addon#50).
+  Se zapnutým Tailscale (feature v projektu a nainstalovaný doplněk Tailscale)
+  adresa domu `https://<název HA>.<tailnet>` s **Kopírovat adresu**,
+  **Aktuální nastavení** (tailnet, název HA v Tailscale, verze a stav doplňku,
+  HTTPS certifikát „Platí do …“ (ověřuje se na pozadí; brzy končící žlutě,
+  neplatný s upozorněním), kamery zvenku přes WebRTC, přístup
+  k zařízením doma) s **Zkontrolovat** a návod **Přidat další zařízení** pro
+  iPhone/iPad, Android, Windows a Mac s QR kódem adresy. Bez Tailscale
+  vysvětlení a **Požádat technika o zapnutí** (`remote_access.request`,
+  homecraftcz/homecraft#947), potom „Žádost odeslána <datum>“. Žádné volání
+  Tailscale API, žádné klíče Tailscale. Nové `GET /api/remote`,
+  `GET /api/remote/qr.svg` a `POST /api/remote/request` (audit
+  `remote_access.request`); nová závislost `segno` (čistý Python) pro QR.
 - Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
   z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
   nastavení Tailscale, `last_change`, `technician`,

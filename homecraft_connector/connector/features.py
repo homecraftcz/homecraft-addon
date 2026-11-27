@@ -164,6 +164,13 @@ def load() -> dict:
         return dict(EMPTY)
 
 
+def mark_remote_access_requested(at: float) -> None:
+    """The owner's request went through (#50): kept until Homecraft's next
+    report (which carries the same time), so a reload still shows it."""
+    stored = {**load(), "remote_access_requested_at": at}
+    write_private(_path(), json.dumps(stored, ensure_ascii=False).encode())
+
+
 def save(report: object) -> dict:
     """Validate and replace the stored summary; returns what was stored."""
     stored = {**validate(report), "received_at": time.time()}

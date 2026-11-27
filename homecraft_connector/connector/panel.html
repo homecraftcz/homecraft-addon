@@ -228,9 +228,33 @@ label.f input { font-size: 14px; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hfb-card) 40%, transparent); }
 .bar button.primary { background: var(--hfb-card); color: var(--hfb-text); }
 .bar button:focus-visible { outline-color: var(--hfb-card); }
+/* Vzdálený přístup (#50) */
+.halves { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 8px; }
+.addr { display: flex; align-items: center; gap: 8px; background: var(--hfb-fill); border-radius: 12px; padding: 6px 6px 6px 14px; min-width: 0; }
+.addr .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.addr button.sf { background: var(--hfb-card); }
+.fi { width: 32px; height: 32px; border-radius: 50%; background: var(--hfb-card); color: var(--hfb-blue-grey);
+  display: flex; align-items: center; justify-content: center; flex: none; }
+.fi.ok { color: var(--ok); }
+.fi.warn { color: var(--warn); background: var(--warn-tint); }
+.field .val { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.field .help:empty { display: none; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--hfb-border); }
+.step:first-child { border-top: 0; }
+.step .num { width: 26px; height: 26px; border-radius: 50%; background: var(--hfb-fill); color: var(--hfb-text-2);
+  font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.step.now .num { background: var(--hfb-text); color: var(--hfb-card); }
+.step .grow { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.step .st { font-size: 14px; font-weight: 600; }
+.step .mono { overflow-wrap: anywhere; }
+.qrrow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.qrrow .help { flex: 1 1 180px; }
+.qr { width: 132px; height: 132px; border-radius: 12px; background: #fff; flex: none; }
 @media (max-width: 760px) {
   main { padding: 16px 16px 32px; gap: 14px; }
-  .split, .home, .heat { grid-template-columns: minmax(0, 1fr); }
+  .split, .home, .heat, .halves { grid-template-columns: minmax(0, 1fr); }
   .tiles { grid-template-columns: minmax(0, 1fr); }
   /* Phone: icons only, the current tab keeps its label (visually hidden ones stay for screen readers). */
   .nav a:not([aria-current="page"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -425,11 +449,75 @@ label.f input { font-size: 14px; }
     </section>
   </div>
   </div>
-  <section class="card center" data-tab="remote" hidden>
-    <span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span>
-    <h2 class="t">Vzdálený přístup</h2>
-    <p class="help">Připravujeme. Tady brzy zapnete přístup k domu odkudkoli a přidáte do něj telefon nebo počítač.</p>
+  <!-- Vzdálený přístup (#50) -->
+  <div data-tab="remote" class="stack" hidden>
+  <div class="msg err" id="raLoadMsg" role="status"></div>
+  <section class="card" id="raOff" aria-labelledby="raOffH" hidden>
+    <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span><div class="grow"><h2 class="t" id="raOffH">Home Assistant i mimo domov</h2><div class="s">Bez veřejné adresy a přesměrování portů. Zvenku se dostanou jen vaše přihlášená zařízení.</div></div></div>
+    <div class="grid g3">
+      <div class="tile"><div class="l">Co potřebujete</div><div class="v">Účet Tailscale</div><div class="c">zdarma, přihlášení Googlem nebo Applem</div></div>
+      <div class="tile"><div class="l">Co se nainstaluje</div><div class="v">Doplněk Tailscale</div><div class="c">o nastavení se postará Homecraft</div></div>
+      <div class="tile"><div class="l">Jak dlouho</div><div class="v">asi 10 minut</div><div class="c">technik vás provede krok za krokem</div></div>
+    </div>
+    <p class="help">Vzdálený přístup zapíná technik. Požádejte ho, ozve se vám.</p>
+    <div class="btns"><button type="button" class="primary" id="raRequest">Požádat technika o zapnutí</button><span class="pill ok dotted" id="raRequested" hidden></span></div>
+    <div class="msg" id="raMsg" role="status"></div>
   </section>
+  <section class="card" id="raOn" aria-labelledby="raOnH" hidden>
+    <div class="hd"><span class="dot okd"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span><div class="grow"><h2 class="t" id="raOnH">Vzdálený přístup je zapnutý</h2><div class="s">Home Assistant otevřete odkudkoli ze zařízení přihlášeného do vašeho Tailscale.</div></div><span class="pill ok dotted" id="raPill">Dostupné zvenku</span></div>
+    <div class="addr" id="raAddr"><span class="mono" id="raUrl"></span><button type="button" class="sf" id="raCopy">Kopírovat adresu</button></div>
+    <p class="help" id="raNoUrl">Adresu domu doplní technik, jakmile v Homecraftu vyplní jméno tailnetu.</p>
+    <div class="msg" id="raCopyMsg" role="status"></div>
+  </section>
+  <div class="grid halves" id="raGrid" hidden>
+    <section class="card" aria-labelledby="raSetH">
+      <div class="hd"><div class="grow"><h2 class="t" id="raSetH">Aktuální nastavení</h2><div class="s" id="raChecked"></div></div><button type="button" class="sf" id="raCheck">Zkontrolovat</button></div>
+      <div class="rows">
+        <div class="field" id="raTailnet" hidden><span class="fi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span><div class="fl"><div class="lbl">Tailnet (váš účet Tailscale)</div><div class="val"><span class="mono" id="raTailnetVal"></span></div><div class="help" id="raTailnetHelp"></div></div></div>
+        <div class="field" id="raHost" hidden><span class="fi"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg></span><div class="fl"><div class="lbl">Home Assistant v Tailscale</div><div class="val"><span class="mono" id="raHostVal"></span></div><div class="help" id="raHostHelp"></div></div></div>
+        <div class="field" id="raCert" hidden><span class="fi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><div class="fl"><div class="lbl">HTTPS certifikát</div><div class="val" id="raCertVal"></div><div class="help" id="raCertHelp"></div></div></div>
+        <div class="field" id="raCam" hidden><span class="fi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></span><div class="fl"><div class="lbl">Kamery zvenku</div><div class="val" id="raCamVal"></div><div class="help" id="raCamHelp"></div></div></div>
+        <div class="field" id="raSubnet" hidden><span class="fi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><div class="fl"><div class="lbl">Přístup i k zařízením doma</div><div class="val" id="raSubnetVal"></div><div class="help" id="raSubnetHelp"></div></div></div>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="raAddH">
+      <div class="hd"><div class="grow"><h2 class="t" id="raAddH">Přidat další zařízení</h2><div class="s">Telefon, tablet nebo počítač – každé zvlášť, zabere to pár minut.</div></div></div>
+      <div class="seg" role="tablist" aria-label="Zařízení" id="raOs">
+        <button type="button" role="tab" data-os="ios" aria-controls="raSteps">iPhone / iPad</button>
+        <button type="button" role="tab" data-os="android" aria-controls="raSteps">Android</button>
+        <button type="button" role="tab" data-os="windows" aria-controls="raSteps">Windows</button>
+        <button type="button" role="tab" data-os="mac" aria-controls="raSteps">Mac</button>
+      </div>
+      <ol class="steps" id="raSteps" role="tabpanel">
+        <li class="step now"><span class="num">1</span><div class="grow"><div class="st">Nainstalujte Tailscale</div>
+          <p class="help" data-for="ios mac">Najdete v App Store jako „Tailscale“.</p>
+          <p class="help" data-for="android">Najdete v Google Play jako „Tailscale“.</p>
+          <p class="help" data-for="windows">Stáhněte z <a href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer">tailscale.com/download</a>.</p></div></li>
+        <li class="step"><span class="num">2</span><div class="grow"><div class="st">Přihlaste se stejným účtem</div>
+          <p class="help">Tím, kterým je přihlášený Home Assistant<span class="raTailnetNote"> (tailnet <span class="mono raTailnet"></span>)</span>. S jiným účtem se dům neukáže.</p></div></li>
+        <li class="step"><span class="num">3</span><div class="grow"><div class="st">Vypněte expiraci klíče</div>
+          <p class="help">Na webu Tailscale › <b>Machines</b> u nového zařízení zvolte <b>…</b> › <b>Disable key expiry</b>, jinak se za 180 dní odhlásí.</p>
+          <p class="help"><a href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer">Otevřít Machines v Tailscale</a></p></div></li>
+        <li class="step" data-for="ios android"><span class="num">4</span><div class="grow"><div class="st">Přidejte adresu do aplikace Home Assistant</div>
+          <div class="qrrow"><img class="qr raQr" alt="QR kód adresy domu" width="132" height="132" hidden><p class="help">V aplikaci Home Assistant › Nastavení › Companion app › Servery přidejte adresu <span class="mono raUrl"></span><span class="raQrNote">, nebo naskenujte QR kód</span>.</p></div></div></li>
+        <li class="step" data-for="windows mac"><span class="num">4</span><div class="grow"><div class="st">Otevřete adresu v prohlížeči</div>
+          <p class="help">Uložte si adresu <span class="mono raUrl"></span> do záložek.</p></div></li>
+        <li class="step"><span class="num">5</span><div class="grow"><div class="st">Ať se připojuje samo</div>
+          <p class="help" data-for="ios">Zapněte v aplikaci Tailscale <b>VPN On Demand</b>, ať se telefon připojí sám, kdykoli je mimo domácí Wi-Fi.</p>
+          <p class="help" data-for="android">V nastavení Androidu › Síť › VPN zapněte u Tailscale <b>Trvalá VPN</b>.</p>
+          <p class="help" data-for="windows">Tailscale se spouští sám po přihlášení do Windows, nic dalšího není potřeba.</p>
+          <p class="help" data-for="mac">V menu Tailscale zapněte <b>Spustit po přihlášení</b>.</p></div></li>
+      </ol>
+      <details class="adv">
+        <summary>Pro člena rodiny s vlastním účtem</summary>
+        <div class="stack sm">
+          <p class="help">Na webu Tailscale › <b>Users</b> › <b>Invite users</b> pošlete pozvánku na jeho e-mail. Po přijetí postupuje podle kroků výše, jen se přihlásí svým účtem.</p>
+          <div><a class="sb" href="https://login.tailscale.com/admin/users" target="_blank" rel="noopener noreferrer">Otevřít správu uživatelů</a></div>
+        </div>
+      </details>
+    </section>
+  </div>
+  </div>
 
   <!-- Zařízení v síti -->
   <div data-tab="devices" class="stack" hidden>
@@ -829,6 +917,7 @@ const AUDIT_TEXT = {
   "update.run": ["Aktualizace spuštěná z panelu", true],
   "panel.helper": ["Majitel změnil nastavení topení v panelu", true],
   "heating.save": ["Majitel uložil názvy a okna topení v panelu", true],
+  "remote_access.request": ["Majitel požádal o vzdálený přístup", false],
   "updates.set": ["Poslal seznam aktualizací", false],
   "errors.report": ["Dostal chybová hlášení", true],
 };
@@ -958,6 +1047,7 @@ const FEAT_STATUS = { running: ["běží", "ok"], update: ["aktualizace čeká n
 let feats = { project_url: "", features: [], received_at: null };
 let lastFeats = null;
 let house = { heating: null, low_batteries: [] };
+let remoteData = null;  // the last /api/remote (#50)
 
 function line(text, cls) {
   const div = document.createElement("div");
@@ -1041,13 +1131,16 @@ function renderHouse() {
 function renderRemoteAndTech() {
   // An older report has no `id`: the name tells.
   const ts = feats.features.find((f) => f.id ? f.id === "tailscale" : /tailscale/i.test(f.name));
-  const broken = ts && ts.status === "addon_error";
-  $("tRemote").textContent = !ts ? "Vypnuto" : broken ? "Chyba doplňku" : "Zapnuto";
-  $("tRemoteDot").className = "dot" + (ts && !broken ? " okd" : "");
-  const tailnet = ts && !broken && ts.settings && ts.settings.tailnet;
+  // "On" is the tab's rule (feature + add-on installed, /api/remote); until it loads, the feature.
+  const on = remoteData ? remoteData.enabled : !!ts;
+  const broken = on && ts && ts.status === "addon_error";
+  const requested = (remoteData && remoteData.requested_at) || feats.remote_access_requested_at;
+  $("tRemote").textContent = !on ? "Vypnuto" : broken ? "Chyba doplňku" : "Zapnuto";
+  $("tRemoteDot").className = "dot" + (on && !broken ? " okd" : "");
+  const tailnet = on && !broken && (remoteData ? remoteData.tailnet : ts.settings && ts.settings.tailnet);
   $("tRemoteSub").textContent = broken ? ts.error || "Technik o chybě ví z Homecraftu"
-    : ts ? (tailnet || "Adresu doplní technik")
-    : feats.remote_access_requested_at ? "Požádáno " + fmtTime(feats.remote_access_requested_at)
+    : on ? (tailnet || "Adresu doplní technik")
+    : requested ? "Požádáno " + fmtTime(requested)
     : "Zapnete v záložce Vzdálený přístup";
   $("tRemoteSub").className = "meta" + (tailnet ? " mono" : "");
   $("techName").textContent = feats.technician ? feats.technician + " · Homecraft" : "Homecraft";
@@ -1077,6 +1170,134 @@ async function refreshFeatures() {
   renderFeatures();
   renderDevices();  // the Používá column
 }
+
+// --- Vzdálený přístup (#50): /api/remote when the tab opens and on Zkontrolovat
+// iPadOS reports itself as a Mac; the touch points tell it apart.
+const isIpad = /mac/i.test(navigator.platform) && navigator.maxTouchPoints > 1;
+let remoteOs = /android/i.test(navigator.userAgent) ? "android" : /iphone|ipad/i.test(navigator.userAgent) || isIpad ? "ios"
+  : /mac/i.test(navigator.platform) ? "mac" : /win/i.test(navigator.platform) ? "windows" : "ios";
+let remoteCheckedAt = null;  // the last successful /api/remote
+let remoteRepoll = null;
+const ADDON_STATE = { started: "běží", stopped: "zastavený", error: "chyba", unknown: "stav neznámý" };
+const fmtDate = (ts) => new Date(ts * 1000).toLocaleDateString("cs-CZ");
+
+// tone: "ok" (green icon), "warn" or "" (grey)
+function raField(id, value, help, tone) {
+  $(id).hidden = value == null;
+  if (value == null) return;
+  $(id + "Val").textContent = value;
+  $(id + "Help").textContent = help || "";
+  $(id).querySelector(".fi").className = "fi " + (tone || "");
+}
+
+function certField(c) {
+  if (!c) return raField("raCert", null);
+  if (c.state === "invalid") return raField("raCert", "Certifikát neplatí – dejte vědět technikovi", "", "warn");
+  raField("raCert", "Platí do " + fmtDate(c.expires),
+    c.state === "soon" ? "Brzy vyprší. Když se do pár dní neobnoví, dejte vědět technikovi." : "Obnovuje se sám.",
+    c.state === "soon" ? "warn" : "ok");
+}
+
+function renderRemoteOs() {
+  for (const b of $("raOs").children) b.setAttribute("aria-selected", String(b.dataset.os === remoteOs));
+  for (const el of $("raSteps").querySelectorAll("[data-for]")) el.hidden = !el.dataset.for.split(" ").includes(remoteOs);
+}
+
+function renderRemote() {
+  const r = remoteData;
+  if (!r) return;
+  $("raOff").hidden = r.enabled;
+  $("raOn").hidden = $("raGrid").hidden = !r.enabled;
+  $("raRequest").hidden = !!r.requested_at;
+  $("raRequested").hidden = !r.requested_at;
+  if (r.requested_at) $("raRequested").textContent = "Žádost odeslána " + fmtTime(r.requested_at);
+  if (!r.enabled) return;
+  const running = r.addon.state === "started";
+  $("raPill").textContent = !running ? "Doplněk Tailscale neběží" : r.https ? "Dostupné zvenku" : "HTTPS adresa vypnutá";
+  $("raPill").className = "pill dotted " + (running && r.https ? "ok" : "warn");
+  $("raUrl").textContent = r.url;
+  $("raAddr").hidden = !r.url;
+  $("raNoUrl").hidden = !!r.url;
+  $("raNoUrl").textContent = r.https ? "Adresu domu doplní technik, jakmile v Homecraftu vyplní jméno tailnetu."
+    : "HTTPS adresa není zapnutá, technik zapne proxy v doplňku Tailscale.";
+  $("raNoUrl").className = r.https ? "help" : "alert warn";
+  $("raChecked").textContent = "Nastavil Homecraft" + (remoteCheckedAt
+    ? " · zkontrolováno " + remoteCheckedAt.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : "");
+  raField("raTailnet", r.tailnet || null);
+  raField("raHost", r.hostname, [("Doplněk Tailscale " + r.addon.version).trim(), ADDON_STATE[r.addon.state] || r.addon.state]
+    .filter(Boolean).join(" · "));
+  certField(r.cert);
+  raField("raCam", r.cameras == null ? null : r.cameras ? "Rychlé (WebRTC)" : "Jen pomalejší cestou (bez WebRTC)",
+    r.cameras === false ? "Technik musí v doplňku Tailscale vypnout userspace networking." : "", r.cameras ? "ok" : "");
+  raField("raSubnet", r.subnet == null ? null : r.subnet ? "Zapnuto – síť " + r.subnet : "Vypnuto – zvenku jen Home Assistant",
+    r.subnet ? "Zvenku i na zařízení doma bez vlastního Tailscale. Zapíná a vypíná technik."
+      : "Zvenku i na NAS nebo kamery bez vlastního Tailscale – zapne technik, když chcete.");
+  for (const el of document.querySelectorAll(".raTailnet")) el.textContent = r.tailnet;
+  for (const el of document.querySelectorAll(".raTailnetNote")) el.hidden = !r.tailnet;
+  for (const el of document.querySelectorAll(".raUrl")) {
+    el.textContent = r.url || "domu";  // "… adresu domu" until there is one
+    el.classList.toggle("mono", !!r.url);
+  }
+  for (const el of document.querySelectorAll(".raQrNote")) el.hidden = !r.url;
+  for (const img of document.querySelectorAll(".raQr")) {
+    img.hidden = !r.url;
+    // The URL in the query only busts the cache: the server builds the code from its own state.
+    if (r.url) img.src = "api/remote/qr.svg?u=" + encodeURIComponent(r.url);
+  }
+  renderRemoteOs();
+}
+
+// The certificate is probed in the background (at most 3 s): while it runs,
+// ask once more a little later.
+async function refreshRemote(force) {
+  $("raCheck").disabled = true;
+  try {
+    remoteData = await call("GET", "api/remote" + (force ? "?force=1" : ""));
+    remoteCheckedAt = new Date();
+    show("raLoadMsg", "");
+    if (remoteData.cert_pending && !remoteRepoll) {
+      remoteRepoll = setTimeout(() => { remoteRepoll = null; refreshRemote(); }, 3500);
+    }
+  } catch (e) {
+    show("raLoadMsg", "Stav vzdáleného přístupu se nepodařilo načíst: " + e.message, true);
+  } finally {
+    $("raCheck").disabled = false;
+  }
+  renderRemote();
+  renderRemoteAndTech();  // the Domů tile follows the same rule
+}
+window.addEventListener("hashchange", () => { if (location.hash === "#remote") refreshRemote(); });
+$("raCheck").onclick = () => refreshRemote(true);
+for (const b of $("raOs").children) b.onclick = () => { remoteOs = b.dataset.os; renderRemoteOs(); };
+renderRemoteOs();
+
+$("raRequest").onclick = async () => {
+  $("raRequest").disabled = true;
+  show("raMsg", "Odesílám…");
+  try {
+    const r = await call("POST", "api/remote/request", {});
+    show("raMsg", "Technik žádost uvidí v Homecraftu a ozve se vám.");
+    remoteData = { ...remoteData, requested_at: r.requested_at || Date.now() / 1000 };
+    renderRemote();
+    refreshFeatures().catch(() => {});  // the Domů tile
+  } catch (e) {
+    show("raMsg", e.message, true);
+  } finally {
+    $("raRequest").disabled = false;
+  }
+};
+
+$("raCopy").onclick = async () => {
+  const url = remoteData && remoteData.url;
+  try {
+    await navigator.clipboard.writeText(url);
+    show("raCopyMsg", "Adresa zkopírována.");
+  } catch {
+    // HA's iframe may not allow the clipboard: select the text for Ctrl+C / ⌘C.
+    getSelection().selectAllChildren($("raUrl"));
+    show("raCopyMsg", "Adresa je označená, zkopírujte ji Ctrl+C (na Macu ⌘C).");
+  }
+};
 
 // Every 30 s, not with refresh(): it reads all of HA's states. Not while the
 // page is hidden or the previous request still runs.
@@ -2028,4 +2249,6 @@ refresh();
 setInterval(refresh, 5000);
 refreshHouse();
 setInterval(refreshHouse, 30000);
+refreshRemote();  // the Domů tile needs it too; a Supervisor call and a cached certificate
+setInterval(() => { if (!document.hidden) refreshRemote(); }, 30000);
 </script>
