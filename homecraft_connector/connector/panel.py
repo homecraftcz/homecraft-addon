@@ -1,8 +1,9 @@
 """The add-on panel behind HA ingress (#556): the house name (HA's location_name),
 state, verification and pairing code, Access token, pause, consent to error reports (#31)
 with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices (#631)
-with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636)
-and the live heating on Domů (#47, read only).
+with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636),
+the live heating on Domů (#47, read only) and Topení (#48: read, plus the
+five helpers of a circuit the owner sets).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -345,12 +346,32 @@ async def _features(request: web.Request) -> web.Response:
     return web.json_response(features.load())
 
 
+def _circuits() -> list | None:
+    """The heating circuits Homecraft reported; None without heating (or from
+    an older Homecraft)."""
+    heating = [f for f in features.load()["features"] if isinstance(f.get("circuits"), list)]
+    return [c for f in heating for c in f["circuits"]] if heating else None
+
+
+def _circuit(instance: object) -> dict | None:
+    return next(
+        (
+            c
+            for c in _circuits() or []
+            if isinstance(c, dict)
+            and isinstance(instance, str)
+            and instance
+            and c.get("instance") == instance
+        ),
+        None,
+    )
+
+
 async def _house(request: web.Request) -> web.Response:
     """Live heating for Domů (#47). Without circuits in the features report
     (an older Homecraft, no heating) HA is not asked: `heating` is None."""
-    heating = [f for f in features.load()["features"] if isinstance(f.get("circuits"), list)]
-    circuits = [c for f in heating for c in f["circuits"]]
-    if not heating:
+    circuits = _circuits()
+    if circuits is None:
         return web.json_response({"heating": None, "low_batteries": []})
     try:
         return web.json_response(await house.heating_summary(circuits))
@@ -363,6 +384,45 @@ async def _house(request: web.Request) -> web.Response:
                 "error": f"Home Assistant neodpověděl ({e.code})",
             }
         )
+
+
+async def _heating(request: web.Request) -> web.Response:
+    """One circuit for Topení (#48), live from HA."""
+    circuit = _circuit(request.query.get("circuit"))
+    if circuit is None:
+        return web.json_response({"ok": False, "error": "Okruh není v souhrnu"}, status=404)
+    try:
+        return web.json_response(await house.heating_detail(circuit))
+    except policy.OpError as e:
+        logger.warning("Okruh topení z HA nenačten: %s %s", e.code, e.message)
+        return web.json_response(
+            {"ok": False, "error": f"Home Assistant neodpověděl ({e.code})"}, status=502
+        )
+
+
+async def _heating_helper(request: web.Request) -> web.Response:
+    """Sets one of the five owner helpers of a reported circuit (#48): only
+    house.HELPERS, range-checked; never another entity or service."""
+    instance = await _json_field(request, "circuit", str)
+    key = await _json_field(request, "key", str)
+    value = await _json_field(request, "value", object)
+    if _circuit(instance) is None:
+        return web.json_response({"ok": False, "error": "Okruh není v souhrnu"}, status=400)
+    try:
+        data = await house.set_helper(instance, key, value)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": f"Neplatná hodnota: {e}"}, status=400)
+    except policy.OpError as e:
+        entity_id = house.HELPERS[key][0] + instance
+        audit.record("panel.helper", entity_id, False, e.code)
+        logger.warning("Nastavení %s selhalo: %s %s", entity_id, e.code, e.message)
+        return web.json_response(
+            {"ok": False, "error": f"Home Assistant neodpověděl ({e.code})"}, status=502
+        )
+    value = next(v for k, v in data.items() if k != "entity_id")
+    audit.record("panel.helper", f"{data['entity_id']} = {value}", True)
+    logger.info("V panelu nastaveno %s = %s", data["entity_id"], value)
+    return web.json_response({"ok": True, "value": value})
 
 
 async def _network_devices(request: web.Request) -> web.Response:
@@ -460,6 +520,8 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_post("/api/updates/run", _run_update)
     app.router.add_get("/api/features", _features)
     app.router.add_get("/api/house", _house)
+    app.router.add_get("/api/heating", _heating)
+    app.router.add_post("/api/heating/helper", _heating_helper)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_post("/api/network-devices/seen", _network_devices_seen)

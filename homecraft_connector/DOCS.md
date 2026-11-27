@@ -91,7 +91,33 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   naposledy spustil Apply, poslední změna, operace za 24 h a odmítnuté, odkaz
   **Co Homecraft dělal**), **Pozastavit Homecraft** a **Aktualizace**, jen
   když nějaká čeká.
-- **Topení** a **Vzdálený přístup**: zatím „Připravujeme“.
+- **Topení**: vlevo okruhy z Homecraftu (počet hlavic, topí / útlum) a odkaz
+  **Otevřít kartu topení** (pohled okruhu v HA podle atributu `url`
+  `binary_sensor.heating_state_<okruh>`, jinak `/lovelace`). Vybraný okruh má
+  čtyři podzáložky:
+  - **Hlavice**: název, místnost (z ID entity `climate.<místnost>_valve`),
+    teplota, cíl, fáze (rychlý start, doběh, doběh čerpadla, zavřeno, jinak
+    topí / drží teplotu) a baterie;
+  - **Okna**: stav (zavřeno / otevřeno N min), které hlavice okno zavře,
+    varování „Okno nezavírá žádnou hlavici“ a **Připomenout otevřené okno po**
+    (0–120 min po 5, 0 = nikdy);
+  - **Kdy topit**: věta, zda kotel v režimu Počasí smí topit, přepínač
+    **Venkovní teplotou** / **Časem**, práh (5–25 °C po 0,5) nebo čas od–do;
+  - **Kotel**: jen čtení (relé kotle `switch.boiler_<okruh>`, doběh čerpadla).
+
+  **Co mění majitel sám**: připomenutí okna a pravidlo Počasí. Jsou to
+  helpery okruhu v HA (`input_number.heating_window_reminder_<okruh>`,
+  `input_number.heating_weather_threshold_<okruh>`,
+  `input_select.heating_auto_rule_<okruh>`,
+  `input_datetime.heating_time_from_<okruh>` a `heating_time_to_<okruh>`);
+  panel je uloží hned po změně a potvrdí „Uloženo“. Doplněk smí přes panel
+  nastavit jen těchto pět helperů okruhů, které Homecraft nahlásil
+  v souhrnu, a jen v jejich rozsahu; jiné entity ani služby panel nevolá.
+  Každá změna je v **Co Homecraft dělal** (`panel.helper`).
+  **Co dělá technik**: hlavice, okna a čidla, místnosti, názvy, kotel
+  a rozvrhy (rozvrhy, programy a teploty mění majitel na kartě topení v HA).
+  Stav se čte živě z HA, když je záložka otevřená (každých 30 s).
+- **Vzdálený přístup**: zatím „Připravujeme“.
 - **Zařízení v síti**: seznam síťových zařízení, viz níže.
 - **Homecraft a bezpečnost**: spárování (jen během žádosti o spárování),
   **Co Homecraft dělal**, **Spojení s Homecraftem** (stav, online od,
