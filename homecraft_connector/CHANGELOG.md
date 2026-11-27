@@ -6,7 +6,7 @@
   použitelný i na telefonu, homecraftcz/homecraft-addon#45). V hlavičce je
   název domu (název Home Assistantu) a stav spojení.
 - Pět záložek: **Domů**, **Topení**, **Vzdálený přístup**, **Zařízení v síti**
-  a **Homecraft a bezpečnost**. Topení a Vzdálený přístup zatím ukazují
+  a **Homecraft a bezpečnost**. Vzdálený přístup zatím ukazuje
   „Připravujeme“. Staré odkazy (`#overview`, `#features`, `#network`, `#audit`)
   vedou na nové záložky.
 - **Domů**: dlaždice, banner při odpojení, **Co máte od Homecraftu** (dřív
@@ -32,6 +32,19 @@
   karta **Váš technik** (poslední změna, operace za 24 h). Dlaždice Spojení,
   Co Homecraft dělal a Zabezpečení z Domů odpadly (stav spojení je v hlavičce
   a v banneru, audit v kartě technika).
+- **Topení** podle nového designu (homecraftcz/homecraft-addon#48): vlevo
+  okruhy (počet hlavic, topí / útlum) a odkaz **Otevřít kartu topení**
+  (dashboard okruhu v HA, jinak `/lovelace`); vpravo podzáložky **Hlavice**
+  (teplota, cíl, fáze, baterie, místnost), **Okna** (stav, jak dlouho je
+  otevřené, které hlavice zavře, varování u okna bez hlavice), **Kdy topit**
+  a **Kotel** (jen čtení: relé a doběh čerpadla). Stav se čte živě z HA.
+- Majitel v Topení sám nastaví **Připomenout otevřené okno po N min**
+  a pravidlo režimu **Počasí** (venkovní teplota s prahem, nebo čas od–do);
+  ukládá se do helperů v HA (Enter, opuštění pole, u čísel i chvíli po
+  poslední změně) a panel potvrdí „Uloženo“. Nový `POST /api/heating/helper`
+  smí měnit jen těchto pět helperů okruhů, které Homecraft nahlásil,
+  s kontrolou rozsahu a kroku, a jen když helper v HA existuje; každá změna
+  je v auditu jako `panel.helper` (okruh a klíč, bez hodnoty).
 - Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
   z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
   nastavení Tailscale, `last_change`, `technician`,

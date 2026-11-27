@@ -133,7 +133,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .alert .grow { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
 .alert.wrapbtns { flex-wrap: wrap; align-items: center; }
 .dot.s { width: 32px; height: 32px; }
-.row .dot:not(.okd) { background: var(--hfb-card); }
+.row .dot:not(.okd):not(.heat):not(.run) { background: var(--hfb-card); }
 .row .pill.grey { background: var(--hfb-card); }
 .row .tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .row .acts { display: flex; margin-left: auto; }
@@ -183,9 +183,35 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
 .prof { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--hfb-tile-radius); background: var(--hfb-fill); }
 .prof input { flex: none; margin-top: 2px; }
 .prof .muted { font-size: 12px; }
+/* Topení (#48) */
+.heat { grid-template-columns: 260px minmax(0, 1fr); align-items: start; }
+.side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.h { font-size: 13px; font-weight: 600; margin: 0; }
+.stack.sm { gap: 12px; }
+.circ { display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 12px; min-height: 60px; width: 100%;
+  border-radius: 16px; border: 1px solid var(--hfb-border); background: var(--hfb-card); box-shadow: none; text-align: left; font-weight: 400; }
+.circ[aria-pressed="true"] { border-color: var(--hfb-text); box-shadow: 0 0 0 1px var(--hfb-text); }
+.circ .grow { flex: 1; min-width: 0; display: grid; }
+.circ .n { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.circ .m { font-size: 12px; color: var(--hfb-text-2); }
+.seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--hfb-fill); border-radius: 12px; }
+.seg.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg button { min-height: 36px; padding: 0 6px; background: transparent; box-shadow: none; color: var(--hfb-text-2); font-weight: 500; }
+.seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--hfb-card); color: var(--hfb-text);
+  font-weight: 600; box-shadow: var(--hfb-btn-raised-shadow); }
+.field { align-items: center; flex-wrap: wrap; }
+.field .fl { flex: 1 1 180px; }
+.field .unit { font-size: 13px; color: var(--hfb-text-2); }
+input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tm { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--hfb-text-2); }
+.row .m b { color: var(--hfb-text); font-weight: 600; }
+.row .m .lowbat, .row .m.warn { color: var(--bad); font-weight: 600; }
+.alert.ok { background: var(--ok-tint); color: var(--ok); }
+.alert.info { background: var(--info-tint); color: var(--info); }
+.alert:empty { display: none; }
 @media (max-width: 760px) {
   main { padding: 16px 16px 32px; gap: 14px; }
-  .split, .home { grid-template-columns: minmax(0, 1fr); }
+  .split, .home, .heat { grid-template-columns: minmax(0, 1fr); }
   .tiles { grid-template-columns: minmax(0, 1fr); }
   /* Phone: icons only, the current tab keeps its label (visually hidden ones stay for screen readers). */
   .nav a:not([aria-current="page"]) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -298,12 +324,76 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
     </section>
   </div>
 
-  <!-- Topení, Vzdálený přístup: filled by later issues -->
-  <section class="card center" data-tab="heating" hidden>
+  <!-- Topení (#48): circuits from /api/house, the selected one from /api/heating -->
+  <div data-tab="heating" hidden>
+  <section class="card center" id="heatEmpty">
     <span class="dot heat"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg></span>
     <h2 class="t">Topení</h2>
-    <p class="help">Připravujeme. Tady brzy uvidíte a nastavíte topení, které vám nainstaloval Homecraft.</p>
+    <p class="help" id="heatEmptyText">Topení vám zatím nenainstaloval Homecraft, nebo o něm doplněk ještě neví (souhrn pošle Homecraft po připojení a po každém Apply).</p>
   </section>
+  <div class="grid heat" id="heatMain" hidden>
+    <div class="side">
+      <h2 class="h">Okruhy</h2>
+      <div class="side" id="circList"></div>
+      <div class="card">
+        <p class="help">Rozvrhy, programy a teploty měníte na kartě topení v Home Assistantu.</p>
+        <a class="sb sf" id="heatCardLink" href="/lovelace" target="_top">Otevřít kartu topení</a>
+      </div>
+    </div>
+    <section class="card" aria-labelledby="circH">
+      <div class="hd"><span class="dot" id="circDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg></span>
+        <div class="grow"><div class="s">Okruh topení</div><h2 class="t" id="circH"></h2></div></div>
+      <div class="seg" role="tablist" aria-label="Nastavení okruhu" id="subTabs">
+        <button type="button" role="tab" data-sub="valves">Hlavice</button>
+        <button type="button" role="tab" data-sub="windows">Okna</button>
+        <button type="button" role="tab" data-sub="rule">Kdy topit</button>
+        <button type="button" role="tab" data-sub="boiler">Kotel</button>
+      </div>
+      <div id="heatMsg" class="msg"></div>
+      <div id="circMsg" class="msg"></div>
+      <div class="rows" data-sub="valves" role="tabpanel" id="valveRows"></div>
+      <div class="stack sm" data-sub="windows" role="tabpanel">
+        <div class="rows" id="windowRows"></div>
+        <p class="help" id="windowEmpty">Okruh nemá žádné okenní čidlo.</p>
+        <div class="field">
+          <div class="fl"><label class="lbl" for="hWindowReminder">Připomenout otevřené okno po</label>
+            <p class="help">0 = nikdy. Notifikace přijde do telefonů z kanálu Topení.</p></div>
+          <input type="number" class="num" id="hWindowReminder" data-key="window_reminder" min="0" max="120" step="5" inputmode="numeric">
+          <span class="unit">min</span>
+        </div>
+        <p class="help">Čidla oken páruje technik a ten také určuje, které hlavice okno zavře.</p>
+      </div>
+      <div class="stack sm" data-sub="rule" role="tabpanel">
+        <div class="alert" id="ruleNow" role="status"></div>
+        <h3 class="h">Režim Počasí se řídí</h3>
+        <div class="seg two" role="group" aria-label="Pravidlo režimu Počasí">
+          <button type="button" data-rule="weather">Venkovní teplotou</button>
+          <button type="button" data-rule="time">Časem</button>
+        </div>
+        <div class="field" id="ruleWeather">
+          <div class="fl"><label class="lbl" for="hThreshold">Topit, když je venku pod</label><p class="help">Krok 0,5 °C</p></div>
+          <input type="number" class="num" id="hThreshold" data-key="weather_threshold" min="5" max="25" step="0.5" inputmode="decimal">
+          <span class="unit">°C</span>
+        </div>
+        <div class="field" id="ruleTime">
+          <div class="fl"><span class="lbl">Topit jen v čase</span><p class="help">Přes půlnoc funguje (např. 22:00–06:00).</p></div>
+          <label class="tm">od <input type="time" id="hTimeFrom" data-key="time_from"></label>
+          <label class="tm">do <input type="time" id="hTimeTo" data-key="time_to"></label>
+        </div>
+        <p class="help">V režimu Zapnuto topí kotel podle hlavic vždy, ve Vypnuto nikdy. Režim přepnete na kartě topení.</p>
+      </div>
+      <div class="stack sm" data-sub="boiler" role="tabpanel">
+        <div class="alert info" role="note"><div class="grow">Kotel nastavuje technik. Špatné hodnoty můžou kotel zbytečně zapínat a vypínat a zkracovat mu život.</div></div>
+        <div class="grid g2">
+          <div class="tile"><div class="l">Relé kotle</div><div class="v" id="bRelay">–</div></div>
+          <div class="tile"><div class="l">Doběh čerpadla</div><div class="v" id="bOverrun">–</div></div>
+        </div>
+        <p class="help">Zdroj tepla, výkon a blokaci taktování zadává technik v Homecraftu.</p>
+      </div>
+      <div id="helperMsg" class="msg" role="status"></div>
+    </section>
+  </div>
+  </div>
   <section class="card center" data-tab="remote" hidden>
     <span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span>
     <h2 class="t">Vzdálený přístup</h2>
@@ -703,6 +793,7 @@ const AUDIT_TEXT = {
   "access_token.set": ["Poslal nový přístupový token", false],
   "access_token.commit": ["Přepnul na nový přístupový token", false],
   "update.run": ["Aktualizace spuštěná z panelu", true],
+  "panel.helper": ["Majitel změnil nastavení topení v panelu", true],
   "updates.set": ["Poslal seznam aktualizací", false],
   "errors.report": ["Dostal chybová hlášení", true],
 };
@@ -966,8 +1057,229 @@ async function refreshHouse() {
     housePending = false;
   }
   renderHouse();
+  renderCircuits();
+  renderCircuit();
+  refreshCircuit();
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshHouse(); });
+
+// --- Topení (#48): circuits from /api/house, the selected one from /api/heating
+let circ = null;        // the selected circuit's instance
+let circData = null;    // its /api/heating detail
+let heatLast = null;    // the last good house.heating: kept while HA does not answer
+let subTab = "valves";
+const HEAT_EMPTY = $("heatEmptyText").textContent;
+const PHASE = { fast: "rychlý start", run: "doběh", overrun: "doběh čerpadla", closed: "zavřeno" };
+const MODE = { on: "Zapnuto", off: "Vypnuto", by_weather: "Počasí" };
+const RELAY = { on: "Zapnuto", off: "Vypnuto", unavailable: "Nedostupné" };
+const temp = (n) => n == null ? "–" : n.toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " °C";
+
+function renderCircuits() {
+  // A failed /api/house (error, no heating) keeps the last circuits on screen;
+  // no heating without an error (none reported) clears them.
+  if (house.heating) heatLast = house.heating;
+  else if (!house.error) heatLast = null;
+  const list = heatLast ? heatLast.circuits : [];
+  $("heatMain").hidden = !list.length;
+  $("heatEmpty").hidden = list.length > 0;
+  $("heatEmptyText").textContent = house.error || HEAT_EMPTY;
+  show("heatMsg", list.length && house.error ? house.error : "", true);
+  if (!list.some((c) => c.instance === circ)) { circ = list.length ? list[0].instance : null; circData = null; }
+  $("circList").replaceChildren(...list.map((c) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "circ";
+    b.setAttribute("aria-pressed", String(c.instance === circ));
+    const dot = $("circDot").cloneNode(true);
+    dot.removeAttribute("id");
+    dot.className = "dot" + (c.heating ? " heat" : "");
+    const body = document.createElement("span");
+    body.className = "grow";
+    const n = c.valves.length;
+    const heating = c.valves.filter((v) => v.hvac_action === "heating").length;
+    body.append(line(c.name, "n"), line(n + plural(n, " hlavice", " hlavice", " hlavic") + " · "
+      + (c.heating ? "topí " + heating : "útlum"), "m"));
+    b.append(dot, body);
+    b.onclick = () => { circ = c.instance; circData = null; renderCircuits(); renderCircuit(); refreshCircuit(); };
+    return b;
+  }));
+}
+
+// One load at a time; callers share (and may await) the running one.
+let circLoad = null;
+function refreshCircuit() {
+  if (!circ || location.hash !== "#heating" || document.hidden) return Promise.resolve();
+  circLoad ??= loadCircuit().finally(() => { circLoad = null; });
+  return circLoad;
+}
+async function loadCircuit() {
+  let asked;
+  do {  // another circuit picked meanwhile: load that one too
+    asked = circ;
+    try {
+      const d = await call("GET", "api/heating?circuit=" + encodeURIComponent(asked));
+      if (asked === circ) { circData = d; show("circMsg", ""); }
+    } catch (e) {
+      if (asked === circ) show("circMsg", "Okruh se nepodařilo načíst: " + e.message, true);
+    }
+  } while (circ && asked !== circ);
+  renderCircuit();
+}
+window.addEventListener("hashchange", refreshCircuit);
+
+function valveRow(v) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const dot = $("circDot").cloneNode(true);
+  dot.removeAttribute("id");
+  dot.className = "dot s" + (v.hvac_action === "heating" ? " heat" : PHASE[v.phase] && v.phase !== "closed" ? " run" : "");
+  const m = document.createElement("div");
+  m.className = "m";
+  const b = document.createElement("b");
+  b.textContent = temp(v.temperature);
+  const state = PHASE[v.phase] || (v.state === "off" ? "vypnuto" : v.hvac_action === "heating" ? "topí"
+    : v.state === "unavailable" ? "nedostupná" : "drží teplotu");
+  m.append(b, " · cíl " + temp(v.target) + " · " + state);
+  if (v.battery != null) {
+    const bat = document.createElement("span");
+    bat.textContent = "baterie " + num(v.battery) + " %";
+    if (heatLast && v.battery < heatLast.low_battery_threshold) bat.className = "lowbat";
+    m.append(" · ", bat);
+  }
+  const body = document.createElement("div");
+  body.className = "grow";
+  body.append(line(v.name, "n"), m);
+  row.append(dot, body);
+  if (v.room) row.append(line(v.room, "pill grey"));
+  return row;
+}
+
+function windowRow(w) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const body = document.createElement("div");
+  body.className = "grow";
+  const mins = w.open_since ? Math.max(0, Math.round((Date.now() / 1000 - w.open_since) / 60)) : null;
+  const since = mins == null ? "" : mins < 60 ? " " + mins + " min"
+    : " " + Math.floor(mins / 60) + " h" + (mins % 60 ? " " + (mins % 60) + " min" : "");
+  body.append(line(w.name || "Okno", "n"),
+    line(w.open ? "otevřeno" + since : "zavřeno", "m"),
+    w.valves.length ? line("Zavře: " + w.valves.join(", "), "m")
+      : line("Okno nezavírá žádnou hlavici – topí se i při otevřeném okně.", "m warn"));
+  row.append(body);
+  return row;
+}
+
+function setInput(id, value) {
+  if (document.activeElement !== $(id)) $(id).value = value == null ? "" : String(value);
+  $(id).disabled = value == null;
+}
+
+function renderCircuit() {
+  for (const b of $("subTabs").children) b.setAttribute("aria-selected", String(b.dataset.sub === subTab));
+  for (const p of document.querySelectorAll("[role=tabpanel][data-sub]")) p.hidden = p.dataset.sub !== subTab;
+  const c = (heatLast ? heatLast.circuits : []).find((x) => x.instance === circ);
+  $("circH").textContent = c ? c.name : "";
+  $("circDot").className = "dot" + (c && c.heating ? " heat" : "");
+  const d = circData;
+  $("heatCardLink").href = d ? d.dashboard_url : "/lovelace";
+  $("valveRows").replaceChildren(...(d ? d.valves.map(valveRow) : []));
+  $("windowRows").replaceChildren(...(d ? d.windows.map(windowRow) : []));
+  $("windowEmpty").hidden = !d || d.windows.length > 0;
+  const hp = d ? d.helpers : {};
+  setInput("hWindowReminder", hp.window_reminder);
+  setInput("hThreshold", hp.weather_threshold);
+  setInput("hTimeFrom", hp.time_from);
+  setInput("hTimeTo", hp.time_to);
+  const rule = hp.auto_rule;
+  for (const b of document.querySelectorAll("[data-rule]")) {
+    b.setAttribute("aria-pressed", String(b.dataset.rule === rule));
+    b.disabled = !rule;
+  }
+  $("ruleWeather").hidden = rule === "time";
+  $("ruleTime").hidden = rule !== "time";
+  let text = "";
+  let cls = "info";
+  if (d && rule) {
+    const allowed = d.weather_ok != null ? d.weather_ok
+      : rule === "weather" && d.outdoor != null && hp.weather_threshold != null ? d.outdoor < hp.weather_threshold : null;
+    const verdict = allowed == null ? "" : allowed ? "kotel smí v režimu Počasí topit." : "v režimu Počasí kotel netopí.";
+    if (rule === "time") text = "Topí se od " + (hp.time_from || "?") + " do " + (hp.time_to || "?") + (verdict ? " – teď " + verdict : ".");
+    else if (d.outdoor != null && hp.weather_threshold != null) {
+      text = "Venku " + temp(d.outdoor) + ", " + (d.outdoor < hp.weather_threshold ? "pod " : "nad ")
+        + temp(hp.weather_threshold) + (verdict ? " – " + verdict : ".");
+    } else text = "Venkovní teplota není známá" + (verdict ? " – " + verdict : ".");
+    if (d.mode && d.mode !== "by_weather") text += " Okruh je teď v režimu " + (MODE[d.mode] || d.mode) + ".";
+    cls = allowed ? "ok" : "info";
+  }
+  $("ruleNow").textContent = text;
+  $("ruleNow").className = "alert " + cls;
+  const boiler = d ? d.boiler : {};
+  $("bRelay").textContent = boiler.relay ? RELAY[boiler.relay] || boiler.relay : "–";
+  $("bOverrun").textContent = boiler.overrun != null ? num(boiler.overrun) + " min" : "–";
+}
+
+for (const b of $("subTabs").children) b.onclick = () => { subTab = b.dataset.sub; renderCircuit(); };
+
+// One POST per key at a time; a newer value waits and goes after it.
+const saving = {};  // key -> true while its POST runs
+const queued = {};  // key -> [circuit, value, input] to save after it
+async function saveHelper(circuit, key, value, input) {
+  if (saving[key]) { queued[key] = [circuit, value, input]; return; }
+  saving[key] = true;
+  show("helperMsg", "Ukládám…");
+  try {
+    const r = await call("POST", "api/heating/helper", { circuit, key, value });
+    // Only for the circuit still shown; another one's detail loads by itself.
+    if (circuit === circ && circData && circData.instance === circuit) {
+      circData.helpers[key] = key.startsWith("time_") ? r.value.slice(0, 5) : r.value;
+    }
+    show("helperMsg", "Uloženo");
+  } catch (e) {
+    show("helperMsg", "Neuloženo: " + e.message, true);
+    await refreshCircuit();  // back to what HA has, in this field even while it has focus
+    if (input && circuit === circ && circData) {
+      const v = circData.helpers[key];
+      input.value = v == null ? "" : String(v);
+    }
+  } finally {
+    saving[key] = false;
+  }
+  renderCircuit();
+  if (queued[key]) {
+    const next = queued[key];
+    delete queued[key];
+    saveHelper(...next);
+  }
+}
+
+// Numbers save on Enter, on leaving the field or 800 ms after the last change;
+// times on Enter or on leaving the field. An unchanged value is not sent.
+const timers = {};
+function flush(input) {
+  const key = input.dataset.key;
+  clearTimeout(timers[key]);
+  if (input.disabled || !circData) return;
+  if (!input.value || !input.checkValidity()) {
+    show("helperMsg", "Zadejte " + (input.type === "time" ? "čas" : "číslo od " + input.min + " do " + input.max + " po " + input.step), true);
+    return;
+  }
+  const value = input.type === "number" ? Number(input.value) : input.value;
+  if (value !== circData.helpers[key]) saveHelper(circ, key, value, input);
+}
+for (const input of document.querySelectorAll("input[data-key]")) {
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") flush(input); });
+  input.addEventListener("blur", () => flush(input));
+  if (input.type === "number") {
+    input.addEventListener("input", () => {
+      clearTimeout(timers[input.dataset.key]);
+      timers[input.dataset.key] = setTimeout(() => flush(input), 800);
+    });
+  }
+}
+for (const b of document.querySelectorAll("[data-rule]")) b.onclick = () => {
+  if (circData && b.dataset.rule !== circData.helpers.auto_rule) saveHelper(circ, "auto_rule", b.dataset.rule);
+};
 
 async function refresh() {
   try {
