@@ -65,13 +65,32 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
 `#security`; staré odkazy `#overview` a `#features` vedou na **Domů**,
 `#network` na **Zařízení v síti** a `#audit` na **Homecraft a bezpečnost**):
 
-- **Domů**: dlaždice Spojení, Co máte od Homecraftu (počet features, poslední
-  Apply, čekající aktualizace), Zařízení v síti, Co Homecraft dělal (operace
-  za 24 h a odmítnuté) a Zabezpečení (chybějící tokeny, odkaz otevře **Pro
-  technika**); při odpojení banner **Homecraft teď nemůže do domu** (bez
+- **Domů**: při odpojení banner **Homecraft teď nemůže do domu** (bez
   přístupového tokenu místo něj nápověda k jeho zadání, během žádosti
-  o spárování k porovnání ověřovacího kódu); seznam **Co máte od Homecraftu**;
-  **Pozastavit Homecraft**; **Aktualizace**, jen když nějaká čeká.
+  o spárování k porovnání ověřovacího kódu); bez tokenu správce HA banner
+  s odkazem **Doplnit** (otevře **Pro technika**); banner **Slabá baterie
+  v hlavici … (N %)** s tlačítkem **Ukázat** (záložka Topení). Tři dlaždice:
+  - **Topení**: počet okruhů, hlavic a oken, Topí / Netopí podle okruhů
+    (`binary_sensor.heating_state_<okruh>`) a kolik hlavic právě topí, které
+    okruhy topí a které jsou v útlumu, venkovní teplota (ze zdroje topení,
+    `input_text.heating_outdoor_temperature_source`, jinak
+    `weather.forecast_domov`; bez hodnoty se vynechá), slabé baterie
+    a otevřená okna. Stav čte doplněk živě z Home Assistantu (jen čte, každých
+    30 s). Hlavice a okna okruhů posílá Homecraft v souhrnu features
+    (homecraftcz/homecraft#945); bez něj dlaždice ukáže jen „Topení nastavuje
+    technik“. Slabá baterie = senzor baterie (`device_class: battery`) na
+    stejném zařízení jako hlavice nebo okenní čidlo, pod hranicí
+    `input_number.heating_low_battery_threshold` (bez ní 30 %);
+  - **Vzdálený přístup**: zapnuto (je nainstalovaná feature Tailscale, s jménem
+    tailnetu), chyba doplňku, nebo vypnuto (případně kdy majitel požádal
+    o zapnutí);
+  - **Zařízení v síti**: počet, druhy a nová zařízení ze skenu.
+
+  Dále seznam **Co máte od Homecraftu** (verze, stav; u topení a vzdáleného
+  přístupu **Nastavit**, ostatní „jen přehled“), karta **Váš technik** (kdo
+  naposledy spustil Apply, poslední změna, operace za 24 h a odmítnuté, odkaz
+  **Co Homecraft dělal**), **Pozastavit Homecraft** a **Aktualizace**, jen
+  když nějaká čeká.
 - **Topení** a **Vzdálený přístup**: zatím „Připravujeme“.
 - **Zařízení v síti**: seznam síťových zařízení, viz níže.
 - **Homecraft a bezpečnost**: spárování (jen během žádosti o spárování),

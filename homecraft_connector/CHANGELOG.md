@@ -24,6 +24,19 @@
   nepotvrdí, i po restartu doplňku. Seznam zařízení si to pamatuje v poli
   `seen`; starší seznam se načte beze změny (potvrzená jsou všechna kromě
   zařízení ze skenu). Počet na dlaždici **Domů** počítá jen nepotvrzená.
+- **Domů** podle nového designu (homecraftcz/homecraft-addon#47): dlaždice
+  **Topení** (okruhy, hlavice, okna, kolik hlavic topí, venkovní teplota,
+  slabé baterie; živě z Home Assistantu, jen čtení), **Vzdálený přístup**
+  a **Zařízení v síti**; banner se slabou baterií hlavice nebo okenního čidla;
+  u topení a vzdáleného přístupu v **Co máte od Homecraftu** odkaz **Nastavit**;
+  karta **Váš technik** (poslední změna, operace za 24 h). Dlaždice Spojení,
+  Co Homecraft dělal a Zabezpečení z Domů odpadly (stav spojení je v hlavičce
+  a v banneru, audit v kartě technika).
+- Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
+  z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
+  nastavení Tailscale, `last_change`, `technician`,
+  `remote_access_requested_at`). Neznámá pole už nezahazuje, jen je zkrátí;
+  nový Homecraft tak starší doplněk nerozbije.
 
 ## 0.25.0
 

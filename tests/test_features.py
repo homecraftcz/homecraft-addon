@@ -15,7 +15,7 @@ HEATING = {
     "error": "",
     "files": ["packages/hfb_heating.yaml"],
     "devices": [],
-    "extra": "dropped",
+    "extra": "kept",
 }
 REPORT = {"project_url": "https://app.homecraft.cz/projects/dum", "features": [HEATING]}
 
@@ -34,7 +34,7 @@ def test_report_is_stored_and_read_back_during_a_pause():
     assert by_id[2]["error"]["code"] == "bad_request"
     stored = features.load()
     assert stored["project_url"] == REPORT["project_url"]
-    assert stored["features"] == [{k: v for k, v in HEATING.items() if k != "extra"}]
+    assert stored["features"] == [{**HEATING, "id": "", "assignment": ""}]
     assert stored["received_at"] > 0
     assert {"Features (1)", "Features"} <= {e["target"] for e in audit.recent()}
     assert client._audit_target({"op": "features.report", **REPORT}) == "Features (1)"
@@ -55,6 +55,33 @@ def test_report_is_stored_and_read_back_during_a_pause():
 def test_bad_reports_are_refused(report):
     with pytest.raises(ValueError):
         features.validate(report)
+
+
+def test_extended_report_is_stored_capped_and_unknown_keys_kept():
+    circuit = {"instance": "heating_circuit_1", "title": "x" * 600, "valves": [{}] * 300}
+    report = {
+        **REPORT,
+        "features": [{**HEATING, "id": "heating", "assignment": "heating", "circuits": [circuit]}],
+        "last_change": {"at": 1763900000, "actor": "Karel", "feature": "Topení", "instance": 7},
+        "technician": "Karel Malina",
+        "remote_access_requested_at": "soon",
+        "future": {"deep": [[[[[[[1]]]]]]]},
+    }
+    features.save(report)
+    stored = features.load()
+    [f] = stored["features"]
+    assert (f["id"], f["assignment"], f["extra"]) == ("heating", "heating", "kept")
+    assert len(f["circuits"][0]["title"]) == features.MAX_TEXT
+    assert len(f["circuits"][0]["valves"]) == features.MAX_ITEMS
+    assert stored["last_change"] == {
+        "at": 1763900000,
+        "actor": "Karel",
+        "feature": "Topení",
+        "instance": "",
+    }
+    assert stored["technician"] == "Karel Malina"
+    assert stored["remote_access_requested_at"] is None
+    assert stored["future"] == {"deep": [[[[None]]]]}  # MAX_DEPTH
 
 
 def test_load_without_a_file_is_empty():
