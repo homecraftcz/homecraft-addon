@@ -209,6 +209,25 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
 .alert.ok { background: var(--ok-tint); color: var(--ok); }
 .alert.info { background: var(--info-tint); color: var(--info); }
 .alert:empty { display: none; }
+/* Topení editing (#49) */
+.row.on { box-shadow: inset 0 0 0 1.5px var(--hfb-text); }
+.row .editor { flex: 1 1 100%; display: grid; gap: 10px; min-width: 0; }
+.row .chips { align-items: center; }
+.row .chips .cl { font-size: 12px; color: var(--hfb-text-2); }
+label.f { display: grid; gap: 4px; font-size: 11px; color: var(--hfb-text-2); min-width: 0; }
+label.f input { font-size: 14px; }
+.row input.wn { width: 100%; font-weight: 600; }
+#circName { flex: 1 1 200px; }
+.msg.ok { color: var(--ok); }
+.bar { position: sticky; bottom: 16px; z-index: 1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--hfb-text); color: var(--hfb-card); border-radius: 16px; padding: 10px 10px 10px 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.bar .grow { flex: 1 1 220px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.bar .s2 { font-size: 12px; opacity: .8; }
+.bar button.sf { background: transparent; color: var(--hfb-card);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hfb-card) 40%, transparent); }
+.bar button.primary { background: var(--hfb-card); color: var(--hfb-text); }
+.bar button:focus-visible { outline-color: var(--hfb-card); }
 @media (max-width: 760px) {
   main { padding: 16px 16px 32px; gap: 14px; }
   .split, .home, .heat { grid-template-columns: minmax(0, 1fr); }
@@ -342,7 +361,13 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
     </div>
     <section class="card" aria-labelledby="circH">
       <div class="hd"><span class="dot" id="circDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg></span>
-        <div class="grow"><div class="s">Okruh topení</div><h2 class="t" id="circH"></h2></div></div>
+        <div class="grow"><div class="s">Okruh topení</div><h2 class="t" id="circH"></h2></div>
+        <button type="button" class="ib" id="circRename" aria-label="Přejmenovat okruh" aria-expanded="false" aria-controls="circNameField"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg></button></div>
+      <div class="field" id="circNameField" hidden>
+        <div class="fl"><label class="lbl" for="circName">Název okruhu</label>
+          <p class="help">Název se přepíše v celém Home Assistantu: na kartě topení, v notifikacích i v historii.</p></div>
+        <input id="circName" maxlength="100" autocomplete="off" data-fk="circName">
+      </div>
       <div class="seg" role="tablist" aria-label="Nastavení okruhu" id="subTabs">
         <button type="button" role="tab" data-sub="valves">Hlavice</button>
         <button type="button" role="tab" data-sub="windows">Okna</button>
@@ -361,7 +386,7 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
           <input type="number" class="num" id="hWindowReminder" data-key="window_reminder" min="0" max="120" step="5" inputmode="numeric">
           <span class="unit">min</span>
         </div>
-        <p class="help">Čidla oken páruje technik a ten také určuje, které hlavice okno zavře.</p>
+        <p class="help">Čidla oken páruje technik. Tady jen určíte, které hlavice které okno zavře.</p>
       </div>
       <div class="stack sm" data-sub="rule" role="tabpanel">
         <div class="alert" id="ruleNow" role="status"></div>
@@ -391,6 +416,12 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
         <p class="help">Zdroj tepla, výkon a blokaci taktování zadává technik v Homecraftu.</p>
       </div>
       <div id="helperMsg" class="msg" role="status"></div>
+      <div id="saveMsg" class="msg" role="status"></div>
+      <div class="bar" id="saveBar" role="region" aria-label="Neuložené změny" hidden>
+        <div class="grow"><b id="saveCount"></b> <span id="saveWhat"></span><div class="s2" id="saveNote"></div></div>
+        <button type="button" class="sf" id="saveDiscard">Zahodit</button>
+        <button type="button" class="primary" id="saveBtn">Uložit</button>
+      </div>
     </section>
   </div>
   </div>
@@ -635,6 +666,7 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
 const $ = (id) => document.getElementById(id);
 const NONCE = "{{NONCE}}";
 let editingToken = false;
+let status = null;  // the last /api/status
 let techOpened = false;
 let deleteArmed = null;
 
@@ -705,6 +737,8 @@ function renderSystemLog(sl) {
 
 async function refreshStatus() {
   const s = await call("GET", "api/status");
+  status = s;
+  renderSave();
   $("haName").textContent = s.ha_name || "";
   $("haNameSep").hidden = !s.ha_name;
   $("version").textContent = s.version;
@@ -794,6 +828,7 @@ const AUDIT_TEXT = {
   "access_token.commit": ["Přepnul na nový přístupový token", false],
   "update.run": ["Aktualizace spuštěná z panelu", true],
   "panel.helper": ["Majitel změnil nastavení topení v panelu", true],
+  "heating.save": ["Majitel uložil názvy a okna topení v panelu", true],
   "updates.set": ["Poslal seznam aktualizací", false],
   "errors.report": ["Dostal chybová hlášení", true],
 };
@@ -1151,6 +1186,29 @@ function valveRow(v) {
   body.append(line(v.name, "n"), m);
   row.append(dot, body);
   if (v.room) row.append(line(v.room, "pill grey"));
+  const open = editValve === v.entity_id;
+  row.append(editButton("v:" + v.entity_id, (open ? "Zavřít úpravu " : "Upravit ") + v.name, open, () => {
+    editValve = open ? null : v.entity_id;
+    renderCircuit();
+  }));
+  if (open) {
+    row.classList.add("on");
+    const editor = document.createElement("div");
+    editor.className = "editor";
+    const names = document.createElement("div");
+    names.className = "grid g2";
+    const input = textInput("vn:" + v.entity_id, draftValue().valves[v.entity_id] ?? v.own_name,
+      v.own_name ? "" : v.name, (value) => { draftOf().valves[v.entity_id] = value; });
+    const room = document.createElement("input");
+    room.value = v.room || "–";
+    room.readOnly = true;
+    names.append(field("Název hlavice", input), field("Místnost", room));
+    const help = document.createElement("p");
+    help.className = "help";
+    help.textContent = "Název se přepíše v celém Home Assistantu: na kartě topení, v notifikacích i v historii. Místnost mění technik.";
+    editor.append(names, help);
+    row.append(editor);
+  }
   return row;
 }
 
@@ -1162,13 +1220,207 @@ function windowRow(w) {
   const mins = w.open_since ? Math.max(0, Math.round((Date.now() / 1000 - w.open_since) / 60)) : null;
   const since = mins == null ? "" : mins < 60 ? " " + mins + " min"
     : " " + Math.floor(mins / 60) + " h" + (mins % 60 ? " " + (mins % 60) + " min" : "");
-  body.append(line(w.name || "Okno", "n"),
-    line(w.open ? "otevřeno" + since : "zavřeno", "m"),
-    w.valves.length ? line("Zavře: " + w.valves.join(", "), "m")
-      : line("Okno nezavírá žádnou hlavici – topí se i při otevřeném okně.", "m warn"));
+  const dw = (w.key && draftValue().windows[w.key]) || {};
+  const open = w.key && editWindow === w.key;
+  body.append(open ? field("Název okna", textInput("wn:" + w.key, dw.name ?? w.own_name, w.key,
+    (value) => { (draftOf().windows[w.key] ??= {}).name = value; }, "wn")) : line(w.name || "Okno", "n"),
+  line(w.open ? "otevřeno" + since : "zavřeno", "m"));
+  // Without a key (an older Homecraft) the window cannot be saved: read only.
+  const picked = dw.valves ?? w.valve_ids;
+  if (w.key && circData.valves.length) {
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    chips.setAttribute("role", "group");
+    chips.setAttribute("aria-label", "Hlavice, které okno " + (w.name || "") + " zavře");
+    chips.append(line("Zavře:", "cl"), ...circData.valves.map((v) => {
+      const on = picked.includes(v.entity_id);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = v.name;
+      b.dataset.fk = "wc:" + w.key + ":" + v.entity_id;
+      b.setAttribute("aria-pressed", String(on));
+      b.disabled = saving_;
+      b.onclick = () => {
+        const d = draftOf().windows[w.key] ??= {};
+        // Only this circuit's valves: one the report still names but the circuit lost goes too.
+        d.valves = circData.valves.map((x) => x.entity_id)
+          .filter((id) => id === v.entity_id ? !on : picked.includes(id));
+        renderCircuit();
+      };
+      return b;
+    }));
+    body.append(chips);
+  } else if (w.valves.length) body.append(line("Zavře: " + w.valves.join(", "), "m"));
+  if (!picked.length) body.append(line("Okno nezavírá žádnou hlavici – topí se i při otevřeném okně.", "m warn"));
   row.append(body);
+  if (w.key) {
+    row.append(editButton("w:" + w.key, (open ? "Zavřít úpravu " : "Přejmenovat ") + (w.name || "okno"), open, () => {
+      editWindow = open ? null : w.key;
+      renderCircuit();
+    }));
+  }
+  if (open) row.classList.add("on");
   return row;
 }
+
+// --- Topení editing (#49): names and window valves, saved together through Homecraft
+// Only what the owner touched: {name?, valves: {entity_id: name}, windows: {key: {name?, valves?}}}.
+// Everything else is never sent, so a newer change (the technician's, another
+// panel's) is not overwritten with what this page loaded.
+const drafts = {};      // circuit -> its touched fields
+let editValve = null;   // the valve whose editor is open
+let editWindow = null;  // the window whose name is being edited
+let saving_ = false;    // a heating.save runs
+const SAVE_NOTE = "Po uložení je Homecraft nasadí do Home Assistantu, trvá to asi minutu.";
+
+function draftValue() { return drafts[circ] || { valves: {}, windows: {} }; }
+function draftOf() { return drafts[circ] ??= { valves: {}, windows: {} }; }
+const circName = (d) => d.heading || d.title;
+
+// [heating.save body, what changed] of the shown circuit, or null: the touched
+// fields that differ from what the circuit has now.
+function pendingSave() {
+  const dr = drafts[circ];
+  if (!dr || !circData || circData.instance !== circ) return null;
+  const body = { instance: circ };
+  const what = [];
+  if (dr.name !== undefined && dr.name.trim() !== circName(circData)) {
+    body.title = dr.name.trim();
+    if (circData.heading) body.heading = body.title;  // the card shows the heading first
+    what.push("název okruhu");
+  }
+  for (const v of circData.valves) {
+    if (!Object.hasOwn(dr.valves, v.entity_id)) continue;
+    const n = dr.valves[v.entity_id].trim();
+    if (n !== v.own_name) {
+      (body.valve_names ??= {})[v.entity_id] = n;
+      what.push("hlavice " + (n || v.name));
+    }
+  }
+  for (const w of circData.windows) {
+    const d = w.key && dr.windows[w.key];
+    if (!d) continue;
+    const change = {};
+    if (d.name !== undefined && d.name.trim() !== w.own_name) change.name = d.name.trim();
+    if (d.valves && (d.valves.length !== w.valve_ids.length || d.valves.some((id) => !w.valve_ids.includes(id)))) {
+      change.valves = d.valves;
+    }
+    if (Object.keys(change).length) {
+      (body.windows ??= {})[w.key] = change;
+      what.push("okno " + (change.name || w.name || w.key));
+    }
+  }
+  return what.length ? [body, what] : null;
+}
+
+function renderSave() {
+  const p = circData ? pendingSave() : null;
+  $("saveBar").hidden = !p && !saving_;
+  if (!p) return;
+  const n = p[1].length;
+  $("saveCount").textContent = n + plural(n, " změna", " změny", " změn");
+  $("saveWhat").textContent = "· " + p[1].join(", ");
+  const blocked = !status ? "" : status.paused ? "Homecraft je pozastavený – uložit půjde, až ho znovu povolíte."
+    : !status.connected ? "Homecraft teď není připojený – uložit půjde, až bude zase online." : "";
+  const noName = p[0].title === "" ? "Okruh musí mít název." : "";
+  $("saveNote").textContent = saving_ ? "Nasazuji…" : blocked || noName || SAVE_NOTE;
+  $("saveBtn").disabled = saving_ || !!blocked || !!noName;
+  $("saveDiscard").disabled = saving_;
+}
+
+function editButton(fk, label, open, onclick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "ib";
+  b.dataset.fk = fk;
+  b.setAttribute("aria-label", label);
+  b.setAttribute("aria-expanded", String(open));
+  b.append($("circRename").firstElementChild.cloneNode(true));
+  b.disabled = saving_;
+  b.onclick = onclick;
+  return b;
+}
+
+function textInput(fk, value, placeholder, oninput, cls) {
+  const input = document.createElement("input");
+  input.maxLength = 100;
+  input.autocomplete = "off";
+  input.value = value;
+  input.placeholder = placeholder || "";
+  input.dataset.fk = fk;
+  input.disabled = saving_;
+  if (cls) input.className = cls;
+  input.oninput = () => { oninput(input.value); renderSave(); };
+  return input;
+}
+
+function field(label, control) {
+  const l = document.createElement("label");
+  l.className = "f";
+  l.append(label, control);
+  return l;
+}
+
+// Rows are rebuilt on every refresh: the focused control (data-fk) gets focus back.
+function keepFocus(rebuild) {
+  const a = document.activeElement;
+  const fk = a && a.dataset ? a.dataset.fk : null;
+  const sel = fk && a.tagName === "INPUT" ? [a.selectionStart, a.selectionEnd] : null;
+  rebuild();
+  if (!fk || document.activeElement === a) return;
+  const next = [...document.querySelectorAll("[data-fk]")].find((e) => e.dataset.fk === fk);
+  if (!next) return;
+  next.focus();
+  if (sel) next.setSelectionRange(...sel);
+}
+
+$("circRename").onclick = () => {
+  $("circNameField").hidden = !$("circNameField").hidden;
+  renderCircuit();
+  if (!$("circNameField").hidden) $("circName").focus();
+};
+$("circName").oninput = () => { draftOf().name = $("circName").value; renderSave(); };
+$("saveDiscard").onclick = () => {
+  delete drafts[circ];
+  editValve = editWindow = null;
+  $("circNameField").hidden = true;
+  show("saveMsg", "");
+  renderCircuit();
+};
+$("saveBtn").onclick = async () => {
+  const p = pendingSave();
+  if (!p || saving_) return;
+  const asked = circ;
+  const before = feats.received_at;
+  saving_ = true;
+  show("saveMsg", "");
+  renderCircuit();
+  try {
+    const r = await call("POST", "api/heating/save", p[0]);
+    // The new names come with Homecraft's next features.report: wait for it (30 s at most).
+    for (let i = 0; i < 15 && feats.received_at === before; i++) {
+      await new Promise((ok) => setTimeout(ok, 2000));
+      await refreshFeatures().catch(() => {});
+    }
+    // The saved circuit fresh, whatever refreshHouse's guards (hidden page, a load running) do.
+    const fresh = await call("GET", "api/heating?circuit=" + encodeURIComponent(asked)).catch(() => null);
+    delete drafts[asked];
+    if (asked === circ) {
+      if (fresh) circData = fresh;
+      editValve = editWindow = null;
+      $("circNameField").hidden = true;
+    }
+    $("saveMsg").textContent = r.status === "noop" ? "Uloženo, v Home Assistantu už vše odpovídalo." : "Uloženo a nasazeno.";
+    $("saveMsg").className = "msg ok";
+    refreshHouse();
+  } catch (e) {
+    show("saveMsg", e.message, true);  // Homecraft's or the add-on's sentence; touched fields stay
+  } finally {
+    saving_ = false;
+    renderCircuit();
+  }
+};
 
 function setInput(id, value) {
   if (document.activeElement !== $(id)) $(id).value = value == null ? "" : String(value);
@@ -1183,8 +1435,16 @@ function renderCircuit() {
   $("circDot").className = "dot" + (c && c.heating ? " heat" : "");
   const d = circData;
   $("heatCardLink").href = d ? d.dashboard_url : "/lovelace";
-  $("valveRows").replaceChildren(...(d ? d.valves.map(valveRow) : []));
-  $("windowRows").replaceChildren(...(d ? d.windows.map(windowRow) : []));
+  keepFocus(() => {
+    $("valveRows").replaceChildren(...(d ? d.valves.map(valveRow) : []));
+    $("windowRows").replaceChildren(...(d ? d.windows.map(windowRow) : []));
+  });
+  $("circRename").disabled = !d || saving_;
+  $("circRename").setAttribute("aria-expanded", String(!$("circNameField").hidden));
+  if (document.activeElement !== $("circName")) $("circName").value = d ? draftValue().name ?? circName(d) : "";
+  $("circName").placeholder = circ || "";
+  $("circName").disabled = !d || saving_;
+  renderSave();
   $("windowEmpty").hidden = !d || d.windows.length > 0;
   const hp = d ? d.helpers : {};
   setInput("hWindowReminder", hp.window_reminder);

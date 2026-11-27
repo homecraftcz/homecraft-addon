@@ -339,8 +339,15 @@ def detail(circuit: dict, states: dict[str, dict], devices: dict[str, str]) -> d
     phases = attrs.get("phases") if isinstance(attrs, dict) else None
     phases = phases if isinstance(phases, dict) else {}
     names = {}
+    # The names the owner gave (#49), for editing: "" = HA's own name shows
+    own = {
+        v["entity_id"]: _name(v.get("name"))
+        for v in _items(circuit.get("valves"))
+        if isinstance(v.get("entity_id"), str)
+    }
     for v in c["valves"]:
         eid = v["entity_id"]
+        v["own_name"] = own.get(eid, "")
         room = eid.split(".", 1)[-1]
         v["room"] = room.removesuffix("_valve") if room.endswith("_valve") else ""
         phase = phases.get(eid)
@@ -353,11 +360,16 @@ def detail(circuit: dict, states: dict[str, dict], devices: dict[str, str]) -> d
         opened = [_since(states[e]) for e in sensors if (states.get(e) or {}).get("state") == "on"]
         w["open_since"] = min((t for t in opened if t is not None), default=None)
         w["valves"] = [names.get(e, e) for e in _ids(reported.get("valves"))]
+        w["key"] = _name(reported.get("key"))
+        w["own_name"] = _name(reported.get("name"))
+        w["valve_ids"] = _ids(reported.get("valves"))
     attrs = (states.get(f"binary_sensor.heating_state_{instance}") or {}).get("attributes")
     url = _local_path(attrs.get("url") if isinstance(attrs, dict) else None)
     weather_ok = (states.get(f"binary_sensor.heating_weather_ok_{instance}") or {}).get("state")
     return {
         **c,
+        "title": _name(circuit.get("title")),
+        "heading": _name(circuit.get("heading")),
         "dashboard_url": url or "/lovelace",
         "helpers": {
             key: _helper_value(key, states.get(prefix + instance) or {})

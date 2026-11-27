@@ -3,7 +3,8 @@ state, verification and pairing code, Access token, pause, consent to error repo
 with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices (#631)
 with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636),
 the live heating on Domů (#47, read only) and Topení (#48: read, plus the
-five helpers of a circuit the owner sets).
+five helpers of a circuit the owner sets; #49: names and window valves saved
+through Homecraft's heating.save).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -42,7 +43,7 @@ from . import (
     state,
     system_log,
 )
-from .client import Client
+from .client import AskError, Client
 
 logger = logging.getLogger(__name__)
 
@@ -436,6 +437,113 @@ async def _heating_helper(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "value": value})
 
 
+NAME_MAX = 100  # Homecraft's limit for a circuit, valve or window name
+SAVE_FIELDS = {"instance", "title", "heading", "valve_names", "windows"}
+
+
+def _save_name(value: object, what: str) -> str:
+    if not isinstance(value, str) or len(value.strip()) > NAME_MAX:
+        raise ValueError(f"{what}: text of at most {NAME_MAX} characters")
+    return value.strip()
+
+
+def _heating_payload(body: object) -> dict:
+    """The panel's heating.save body checked against the reported circuit: only
+    SAVE_FIELDS, names as text, valves and windows of that circuit. ValueError."""
+    if not isinstance(body, dict) or not set(body) <= SAVE_FIELDS:
+        raise ValueError(f"an object with {', '.join(sorted(SAVE_FIELDS))}")
+    circuit = _circuit(body.get("instance"))
+    if circuit is None:
+        raise ValueError("instance: not a reported circuit")
+    valves = set(house._ids([v.get("entity_id") for v in house._items(circuit.get("valves"))]))
+    windows = set(house._ids([w.get("key") for w in house._items(circuit.get("windows"))]))
+    out: dict = {"instance": circuit["instance"]}
+    # The circuit's name cannot be cleared (Homecraft would store it empty); the
+    # panel sends `heading` only as the new name too, never to clear it.
+    for key in ("title", "heading"):
+        if key in body:
+            out[key] = _save_name(body[key], key)
+            if not out[key]:
+                raise ValueError(f"{key}: must not be empty")
+    if "valve_names" in body:
+        names = body["valve_names"]
+        if not isinstance(names, dict) or not names or not set(names) <= valves:
+            raise ValueError("valve_names: valves of this circuit")
+        out["valve_names"] = {eid: _save_name(n, eid) for eid, n in names.items()}
+    if "windows" in body:
+        changes = body["windows"]
+        if not isinstance(changes, dict) or not changes or not set(changes) <= windows:
+            raise ValueError("windows: windows of this circuit")
+        out["windows"] = {}
+        for key, change in changes.items():
+            if not isinstance(change, dict) or not change or not set(change) <= {"name", "valves"}:
+                raise ValueError(f"windows.{key}: name and/or valves")
+            w = {}
+            if "name" in change:
+                w["name"] = _save_name(change["name"], f"windows.{key}.name")
+            if "valves" in change:
+                picked = change["valves"]
+                if not isinstance(picked, list) or not all(
+                    isinstance(v, str) and v in valves for v in picked
+                ):
+                    raise ValueError(f"windows.{key}.valves: valves of this circuit")
+                w["valves"] = list(dict.fromkeys(picked))
+            out["windows"][key] = w
+    if len(out) == 1:
+        raise ValueError("nothing to save")
+    return out
+
+
+# heating.save errors (homecraftcz/homecraft#946): these carry a Czech message for
+# the owner, shown as is; the rest are ours or the hub's (English) and get a text here.
+OWNER_MESSAGES = ("invalid", "blocked", "failed")
+SAVE_ERRORS = {
+    "offline": "Homecraft není připojený, změny teď nejde uložit.",
+    "paused": "Homecraft je pozastavený, změny teď nejde uložit.",
+    "unknown": ("Spojení se přerušilo, nevíme, jestli se změna uložila – zkontrolujte za chvíli."),
+    "unknown_op": "Tahle verze Homecraftu ukládání z panelu neumí.",
+    "busy": "Ukládání topení už probíhá, zkuste to za chvíli.",
+    "not_paired": "Doplněk není spárovaný s Homecraftem.",
+    "too_large": "Změn je najednou moc, uložte je po částech.",
+    "blocked": "Technik musí nejdřív vyřešit změny v Home Assistantu.",
+}
+SAVE_TIMEOUT = 300.0  # Plan + Apply on a slow HA can take minutes
+SAVE_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "invalid": 400}
+
+
+async def _heating_save(request: web.Request) -> web.Response:
+    """Topení › Uložit (#49): the owner's names and window valves go to Homecraft
+    as heating.save, which saves the circuit and applies heating (or refuses).
+    The only Homecraft request the panel can make; nothing is changed here."""
+    try:
+        body = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest(text="expected JSON") from None
+    try:
+        payload = _heating_payload(body)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": f"Neplatná změna: {e}"}, status=400)
+    instance = payload["instance"]
+    try:
+        result = await request.app[CLIENT].ask("heating.save", payload, SAVE_TIMEOUT)
+    except AskError as e:
+        audit.record("heating.save", instance, False, e.code)
+        logger.warning("Uložení topení %s selhalo: %s", instance, e.code)
+        message = (e.code in OWNER_MESSAGES and e.message) or SAVE_ERRORS.get(e.code)
+        return web.json_response(
+            {
+                "ok": False,
+                "code": e.code,
+                "error": message or f"Uložení se nepovedlo ({e.code}).",
+            },
+            status=SAVE_STATUS.get(e.code, 502),
+        )
+    audit.record("heating.save", instance, True)
+    status = result.get("status") if isinstance(result, dict) else None
+    logger.info("Topení %s uloženo z panelu (%s)", instance, status)
+    return web.json_response({"ok": True, "status": status})
+
+
 async def _network_devices(request: web.Request) -> web.Response:
     return web.json_response(network_devices.load())
 
@@ -533,6 +641,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/house", _house)
     app.router.add_get("/api/heating", _heating)
     app.router.add_post("/api/heating/helper", _heating_helper)
+    app.router.add_post("/api/heating/save", _heating_save)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_post("/api/network-devices/seen", _network_devices_seen)
