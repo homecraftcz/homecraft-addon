@@ -1,7 +1,17 @@
 # Changelog
 
-## Nevydáno
+## 0.26.0
 
+- Hlavice Shelly BLU TRV okruhu topení jde sjednotit z Homecraftu: operace
+  `trv.sync` (`instance`, `update`, `config` s `trv` = Behavior a `ui` =
+  Interface) nejdřív aktualizuje firmware hlavic, pak jim nastaví nastavení
+  okruhu a zpětně ho ověří. Běží na pozadí, průběh a výsledek každé hlavice
+  vrací `trv.status`. `trv.check` hlavice jen přečte a nic nemění: řekne,
+  jestli je nový firmware, a u každého pole, které nesedí, ukáže chtěnou i
+  skutečnou hodnotu (třeba po ruční změně přes web brány; s prázdným
+  profilem jen zkontroluje firmware); srovná je zase
+  `trv.sync`. Brány a hlavice bere z `sensor.heating_gateways_<okruh>`,
+  volá jen lokální RPC brány na privátní IPv4.
 - Služba Browser Mod `browser_mod.javascript` spouští libovolný JavaScript ve
   všech prohlížečích registrovaných v Browser Mod, i v prohlížeči admina.
   Doplněk ji teď odmítne (`refused_content`) v automatizacích, skriptech,
