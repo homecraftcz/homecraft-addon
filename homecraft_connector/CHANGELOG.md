@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.27.0
+## Nevydáno
 
 - Nový vzhled panelu pro majitele domu ve stylu Homecraft (světlý i tmavý,
   použitelný i na telefonu, homecraftcz/homecraft-addon#45). V hlavičce je
