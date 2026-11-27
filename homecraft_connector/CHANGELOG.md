@@ -60,7 +60,8 @@
   Se zapnutým Tailscale (feature v projektu a nainstalovaný doplněk Tailscale)
   adresa domu `https://<název HA>.<tailnet>` s **Kopírovat adresu**,
   **Aktuální nastavení** (tailnet, název HA v Tailscale, verze a stav doplňku,
-  HTTPS certifikát „Platí do …“, kamery zvenku přes WebRTC, přístup
+  HTTPS certifikát „Platí do …“ (ověřuje se na pozadí; brzy končící žlutě,
+  neplatný s upozorněním), kamery zvenku přes WebRTC, přístup
   k zařízením doma) s **Zkontrolovat** a návod **Přidat další zařízení** pro
   iPhone/iPad, Android, Windows a Mac s QR kódem adresy. Bez Tailscale
   vysvětlení a **Požádat technika o zapnutí** (`remote_access.request`,

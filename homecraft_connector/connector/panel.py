@@ -510,7 +510,19 @@ SAVE_ERRORS = {
     "blocked": "Technik musí nejdřív vyřešit změny v Home Assistantu.",
 }
 SAVE_TIMEOUT = 300.0  # Plan + Apply on a slow HA can take minutes
-SAVE_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "invalid": 400}
+ASK_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "invalid": 400}
+
+
+def _ask_error(e: AskError, op: str, target: str, texts: dict, fallback: str) -> web.Response:
+    """A failed client.ask from the panel: audited, logged, answered in Czech
+    (the handler's own message for OWNER_MESSAGES codes, else `texts`)."""
+    audit.record(op, target, False, e.code)
+    logger.warning("%s %s z panelu selhalo: %s", op, target, e.code)
+    message = (e.code in OWNER_MESSAGES and e.message) or texts.get(e.code)
+    return web.json_response(
+        {"ok": False, "code": e.code, "error": message or f"{fallback} ({e.code})."},
+        status=ASK_STATUS.get(e.code, 502),
+    )
 
 
 async def _heating_save(request: web.Request) -> web.Response:
@@ -530,17 +542,7 @@ async def _heating_save(request: web.Request) -> web.Response:
     try:
         result = await request.app[CLIENT].ask("heating.save", payload, SAVE_TIMEOUT)
     except AskError as e:
-        audit.record("heating.save", instance, False, e.code)
-        logger.warning("Uložení topení %s selhalo: %s", instance, e.code)
-        message = (e.code in OWNER_MESSAGES and e.message) or SAVE_ERRORS.get(e.code)
-        return web.json_response(
-            {
-                "ok": False,
-                "code": e.code,
-                "error": message or f"Uložení se nepovedlo ({e.code}).",
-            },
-            status=SAVE_STATUS.get(e.code, 502),
-        )
+        return _ask_error(e, "heating.save", instance, SAVE_ERRORS, "Uložení se nepovedlo")
     audit.record("heating.save", instance, True)
     status = result.get("status") if isinstance(result, dict) else None
     logger.info("Topení %s uloženo z panelu (%s)", instance, status)
@@ -548,13 +550,14 @@ async def _heating_save(request: web.Request) -> web.Response:
 
 
 async def _remote(request: web.Request) -> web.Response:
-    """Vzdálený přístup (#50): Tailscale's state; read only."""
-    return web.json_response(await remote.status())
+    """Vzdálený přístup (#50): Tailscale's state; read only. `?force=1`
+    (Zkontrolovat) probes the certificate again, in the background."""
+    return web.json_response(await remote.status(request.query.get("force") == "1"))
 
 
 async def _remote_qr(request: web.Request) -> web.Response:
     """The house address as a QR code for `<img>` (the CSP's img-src 'self')."""
-    url = (await remote.status())["url"]
+    url = await remote.url()
     if not url:
         raise web.HTTPNotFound()
     return web.Response(text=remote.qr_svg(url), content_type="image/svg+xml")
@@ -577,15 +580,15 @@ async def _remote_request(request: web.Request) -> web.Response:
     try:
         result = await request.app[CLIENT].ask("remote_access.request", {"note": None})
     except AskError as e:
-        audit.record("remote_access.request", "tailscale", False, e.code)
-        logger.warning("Žádost o vzdálený přístup selhala: %s", e.code)
-        message = REQUEST_ERRORS.get(e.code) or f"Žádost se nepovedla ({e.code})."
-        status = 409 if e.code in ("offline", "paused") else 502
-        return web.json_response({"ok": False, "code": e.code, "error": message}, status=status)
+        return _ask_error(
+            e, "remote_access.request", "tailscale", REQUEST_ERRORS, "Žádost se nepovedla"
+        )
     audit.record("remote_access.request", "tailscale", True)
     logger.info("Majitel požádal o vzdálený přístup z panelu")
-    at = result.get("requested_at") if isinstance(result, dict) else None
-    return web.json_response({"ok": True, "requested_at": features._unix(at)})
+    at = features._unix(result.get("requested_at") if isinstance(result, dict) else None)
+    at = at or time.time()
+    features.mark_remote_access_requested(at)  # until Homecraft's next report
+    return web.json_response({"ok": True, "requested_at": at})
 
 
 async def _network_devices(request: web.Request) -> web.Response:
