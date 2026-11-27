@@ -458,17 +458,21 @@ def _heating_payload(body: object) -> dict:
     valves = set(house._ids([v.get("entity_id") for v in house._items(circuit.get("valves"))]))
     windows = set(house._ids([w.get("key") for w in house._items(circuit.get("windows"))]))
     out: dict = {"instance": circuit["instance"]}
+    # The circuit's name cannot be cleared (Homecraft would store it empty); the
+    # panel sends `heading` only as the new name too, never to clear it.
     for key in ("title", "heading"):
         if key in body:
             out[key] = _save_name(body[key], key)
+            if not out[key]:
+                raise ValueError(f"{key}: must not be empty")
     if "valve_names" in body:
         names = body["valve_names"]
-        if not isinstance(names, dict) or not set(names) <= valves:
+        if not isinstance(names, dict) or not names or not set(names) <= valves:
             raise ValueError("valve_names: valves of this circuit")
         out["valve_names"] = {eid: _save_name(n, eid) for eid, n in names.items()}
     if "windows" in body:
         changes = body["windows"]
-        if not isinstance(changes, dict) or not set(changes) <= windows:
+        if not isinstance(changes, dict) or not changes or not set(changes) <= windows:
             raise ValueError("windows: windows of this circuit")
         out["windows"] = {}
         for key, change in changes.items():
@@ -496,16 +500,14 @@ OWNER_MESSAGES = ("invalid", "blocked", "failed")
 SAVE_ERRORS = {
     "offline": "Homecraft není připojený, změny teď nejde uložit.",
     "paused": "Homecraft je pozastavený, změny teď nejde uložit.",
-    "unsupported": (
-        "Homecraft neodpověděl do 2 minut. Starší Homecraft ukládání z panelu neumí; "
-        "jinak za chvíli zkontrolujte, jestli se změna projevila."
-    ),
+    "unknown": ("Spojení se přerušilo, nevíme, jestli se změna uložila – zkontrolujte za chvíli."),
     "unknown_op": "Tahle verze Homecraftu ukládání z panelu neumí.",
     "busy": "Ukládání topení už probíhá, zkuste to za chvíli.",
     "not_paired": "Doplněk není spárovaný s Homecraftem.",
     "too_large": "Změn je najednou moc, uložte je po částech.",
     "blocked": "Technik musí nejdřív vyřešit změny v Home Assistantu.",
 }
+SAVE_TIMEOUT = 300.0  # Plan + Apply on a slow HA can take minutes
 SAVE_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "invalid": 400}
 
 
@@ -523,7 +525,7 @@ async def _heating_save(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": f"Neplatná změna: {e}"}, status=400)
     instance = payload["instance"]
     try:
-        result = await request.app[CLIENT].ask("heating.save", payload)
+        result = await request.app[CLIENT].ask("heating.save", payload, SAVE_TIMEOUT)
     except AskError as e:
         audit.record("heating.save", instance, False, e.code)
         logger.warning("Uložení topení %s selhalo: %s", instance, e.code)

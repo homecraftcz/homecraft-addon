@@ -55,7 +55,8 @@
   v auditu jako `heating.save`.
 - Doplněk umí poslat Homecraftu vlastní požadavek a počkat na odpověď
   (`{op, rid}` → `{op: "reply", rid, ok, …}`, homecraftcz/homecraft#944;
-  limit 2 minuty; při pauze se nepošle, odpojení čekání hned ukončí).
+  při pauze nebo bez spojení se nepošle; odpojení po odeslání nebo vypršení
+  limitu – u uložení topení 5 minut – znamená „nevíme, jestli se to stalo“).
 - Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
   z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
   nastavení Tailscale, `last_change`, `technician`,

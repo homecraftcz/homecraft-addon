@@ -104,8 +104,9 @@ def test_malformed_error_reply_is_internal():
     assert run(on_frame, scenario) == "internal"
 
 
-def test_no_reply_in_time_is_unsupported():
-    """An older Homecraft drops a frame without `id`: the ask times out."""
+def test_no_reply_in_time_is_unknown():
+    """Sent, but no answer: it may have happened (not an unknown op, the hub
+    answers those at once)."""
 
     async def on_frame(ws, frame):
         pass
@@ -115,10 +116,10 @@ def test_no_reply_in_time_is_unsupported():
             await agent.ask("heating.save", {}, timeout=0.2)
         return e.value.code, agent._conn.pending
 
-    assert run(on_frame, scenario) == ("unsupported", {})
+    assert run(on_frame, scenario) == ("unknown", {})
 
 
-def test_disconnect_fails_the_waiting_ask():
+def test_disconnect_after_sending_is_unknown():
     async def on_frame(ws, frame):
         await ws.close()
 
@@ -127,7 +128,44 @@ def test_disconnect_fails_the_waiting_ask():
             await agent.ask("heating.save", {}, timeout=5)
         return e.value.code
 
-    assert run(on_frame, scenario) == "offline"
+    assert run(on_frame, scenario) == "unknown"
+
+
+def test_send_failure_is_offline_and_leaves_no_future():
+    """Not sent: offline; the future is cancelled, never left with an unread exception."""
+
+    async def on_frame(ws, frame):
+        pass
+
+    async def scenario(agent):
+        futures = []
+        conn = agent._conn
+
+        async def broken(data):
+            futures.extend(conn.pending.values())
+            raise ConnectionResetError
+
+        conn.send = broken
+        with pytest.raises(AskError) as e:
+            await agent.ask("heating.save", {})
+        return e.value.code, conn.pending, futures
+
+    code, pending, [fut] = run(on_frame, scenario)
+    assert (code, pending, fut.cancelled()) == ("offline", {}, True)
+
+
+def test_payload_cannot_set_id():
+    frames = []
+
+    async def on_frame(ws, frame):
+        frames.append(frame)
+        await ws.send_json({"op": "reply", "rid": frame["rid"], "ok": True, "result": None})
+
+    async def scenario(agent):
+        return await agent.ask("heating.save", {"id": 7, "instance": "c1"})
+
+    assert run(on_frame, scenario) is None
+    assert "id" not in frames[0] and frames[0]["instance"] == "c1"
 
 
 def test_paused_sends_nothing():

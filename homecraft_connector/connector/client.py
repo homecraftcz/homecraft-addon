@@ -121,10 +121,10 @@ def access_refused(e: aiohttp.WSServerHandshakeError) -> bool:
 
 
 class AskError(Exception):
-    """ask() failed: `code` is offline, paused, unsupported (no reply in time: an
-    older Homecraft drops requests it does not know), or Homecraft's error code
-    (homecraftcz/homecraft#944: too_large, unknown_op, busy, not_paired,
-    internal, or the handler's own) with its `message`."""
+    """ask() failed: `code` is offline or paused (nothing sent), unknown (sent, but
+    the connection dropped or no reply came in time: it may or may not have
+    happened), or Homecraft's error code (homecraftcz/homecraft#944: too_large,
+    unknown_op, busy, not_paired, internal, or the handler's own) with its `message`."""
 
     def __init__(self, code: str, message: str = "") -> None:
         super().__init__(code)
@@ -397,15 +397,24 @@ class Client:
         rid = secrets.token_hex(8)
         reply = asyncio.get_running_loop().create_future()
         conn.pending[rid] = reply
+        frame = {k: v for k, v in payload.items() if k not in ("id", "op", "rid")}
         try:
-            await conn.send({**payload, "op": op, "rid": rid})
-            answer = await asyncio.wait_for(reply, timeout)
-        except TimeoutError:
-            raise AskError("unsupported") from None
-        except (ConnectionError, RuntimeError, aiohttp.ClientError):
-            raise AskError("offline") from None
+            try:
+                await conn.send({**frame, "op": op, "rid": rid})
+            except (ConnectionError, RuntimeError, aiohttp.ClientError):
+                raise AskError("offline") from None  # not sent: nothing happened
+            # Sent: from here on a lost connection or no reply leaves the outcome open
+            # (since #944 the hub answers an unknown op at once, so silence is not that).
+            try:
+                answer = await asyncio.wait_for(reply, timeout)
+            except TimeoutError:
+                raise AskError("unknown") from None
         finally:
             conn.pending.pop(rid, None)
+            if reply.done() and not reply.cancelled():
+                reply.exception()  # retrieved: never "Future exception was never retrieved"
+            else:
+                reply.cancel()
         if answer.get("ok") is True:
             return answer.get("result")
         error = answer.get("error") if isinstance(answer.get("error"), dict) else {}
@@ -549,9 +558,9 @@ class Client:
             if deadline is not None:
                 deadline.cancel()
             self._conn = None
-            for fut in conn.pending.values():  # ask()s whose reply will never come
+            for fut in conn.pending.values():  # sent ask()s whose reply will never come
                 if not fut.done():
-                    fut.set_exception(AskError("offline"))
+                    fut.set_exception(AskError("unknown"))
             self.updates = []  # stale once disconnected; resent after the next connect
             for task in list(tasks):
                 task.cancel()

@@ -360,8 +360,9 @@ def _save_scenario(monkeypatch, agent, bodies, ask=None, nonce=True):
 def test_save_sends_heating_save(run_panel, agent, monkeypatch):
     asked = []
 
-    async def ask(op, payload):
+    async def ask(op, payload, timeout):
         asked.append((op, payload))
+        assert timeout == panel.SAVE_TIMEOUT == 300
         return {"status": "success"}
 
     body = {
@@ -397,6 +398,10 @@ def test_save_sends_heating_save(run_panel, agent, monkeypatch):
     "body",
     [
         {"instance": C1},  # nothing to save
+        {"instance": C1, "valve_names": {}},
+        {"instance": C1, "windows": {}},
+        {"instance": C1, "title": "  "},
+        {"instance": C1, "heading": ""},
         {"instance": "heating_circuit_9", "title": "X"},
         {"instance": C1, "title": "X", "parameters": {}},
         {"instance": C1, "title": "x" * 101},
@@ -415,7 +420,7 @@ def test_save_sends_heating_save(run_panel, agent, monkeypatch):
 def test_save_refuses_bodies(run_panel, agent, monkeypatch, body):
     asked = []
 
-    async def ask(op, payload):
+    async def ask(op, payload, timeout):
         asked.append(payload)
 
     [(status, reply)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask))
@@ -440,12 +445,12 @@ def test_save_offline_is_409(run_panel, agent, monkeypatch):
         ("invalid", "Hlavice x v okruhu není", 400, "Hlavice x v okruhu není"),
         ("busy", "Too many requests in flight", 409, "už probíhá"),
         ("unknown_op", "Unknown operation", 502, "neumí"),
-        ("unsupported", "", 502, "neodpověděl do 2 minut"),
+        ("unknown", "", 502, "nevíme, jestli se změna uložila"),
         ("internal", "Internal error", 502, "(internal)"),
     ],
 )
 def test_save_errors(run_panel, agent, monkeypatch, code, message, status, shown):
-    async def ask(op, payload):
+    async def ask(op, payload, timeout):
         raise AskError(code, message)
 
     body = {"instance": C1, "title": "X"}
@@ -456,7 +461,7 @@ def test_save_errors(run_panel, agent, monkeypatch, code, message, status, shown
 def test_save_needs_the_nonce(run_panel, agent, monkeypatch):
     asked = []
 
-    async def ask(op, payload):
+    async def ask(op, payload, timeout):
         asked.append(payload)
 
     body = {"instance": C1, "title": "X"}

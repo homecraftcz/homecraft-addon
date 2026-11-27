@@ -129,10 +129,14 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   Homecraftu panel ukáže, jak je, a nic se neuloží napůl. Offline nebo
   pozastavený Homecraft: **Uložit** je zakázané s vysvětlením. Doplněk
   pustí jen `POST /api/heating/save` s názvy a hlavicemi okruhu, který
-  Homecraft nahlásil (hlavice a okna toho okruhu, názvy do 100 znaků),
-  žádnou jinou operaci; v auditu je `heating.save` (okruh, bez názvů). Bez
-  odpovědi do 2 minut (starší Homecraft) panel napíše, ať se majitel za
-  chvíli podívá, jestli se změna projevila.
+  Homecraft nahlásil (hlavice a okna toho okruhu, názvy do 100 znaků; název
+  okruhu nesmí být prázdný, název hlavice nebo okna ano = vrátí se název
+  z HA), žádnou jinou operaci; v auditu je `heating.save` (okruh, bez
+  názvů). Panel posílá jen pole, na která majitel sáhl, takže nepřepíše
+  novější změnu technika; po odmítnutí je drží dál. Když se spojení po
+  odeslání přeruší nebo Homecraft do 5 minut neodpoví, panel napíše
+  „Spojení se přerušilo, nevíme, jestli se změna uložila – zkontrolujte za
+  chvíli.“
   **Co dělá technik**: hlavice, okna a čidla, místnosti, kotel
   a rozvrhy (rozvrhy, programy a teploty mění majitel na kartě topení v HA).
   Stav se čte živě z HA, když je záložka otevřená (každých 30 s).
