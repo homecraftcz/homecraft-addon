@@ -2,7 +2,8 @@
 
 The same model and checks as Homecraft's project network devices (#463/#467):
 addresses only, never credentials. Added here: `hostname` (an mDNS `*.local`
-name) and `source` (who added it: manual, ha, scan, homecraft = the import)."""
+name), `source` (who added it: manual, ha, scan, homecraft = the import) and
+`seen` (the panel's "new device" banner: false for a scan find nobody confirmed yet)."""
 
 import json
 import re
@@ -105,6 +106,11 @@ def _device(device: object) -> dict:
     urls = [_url(u) for u in urls if u != ""]
     if len(urls) > MAX_URLS:
         raise ValueError(f"urls: nejvýš {MAX_URLS} adres")
+    source = _choice(device, "source", SOURCES, "manual")
+    # Files from before `seen`: only scan finds are unconfirmed.
+    seen = device.get("seen", source != "scan")
+    if not isinstance(seen, bool):
+        raise ValueError("seen: true nebo false")
     return {
         "name": _text(device, "name", 100, required=True),
         "kind": _choice(device, "kind", KINDS, "other"),
@@ -113,7 +119,8 @@ def _device(device: object) -> dict:
         "urls": urls,
         "mac": _mac(device),
         "note": _text(device, "note", 1000),
-        "source": _choice(device, "source", SOURCES, "manual"),
+        "source": source,
+        "seen": seen,
     }
 
 
@@ -159,6 +166,16 @@ def save(devices: object) -> list[dict]:
     return stored
 
 
+def mark_seen(addresses: list[str] | str) -> list[dict]:
+    """Confirm new devices: the ones at `addresses`, or every one for "all"."""
+    wanted = None if addresses == "all" else {a.lower() for a in addresses}
+    stored = load()
+    for d in stored:
+        if wanted is None or d["address"].lower() in wanted:
+            d["seen"] = True
+    return save(stored)
+
+
 def import_devices(devices: object) -> dict:
     """Merge Homecraft's old project list into the stored one (#635), by address or MAC.
 
@@ -192,7 +209,10 @@ def import_devices(devices: object) -> dict:
             counts["added"] += 1
             continue
         # Never a hostname: hosts() would trust a name Homecraft chose (#938).
-        missing = {k: v for k, v in new.items() if v and not match.get(k) and k != "hostname"}
+        # Never `seen`: an import does not confirm a scan find.
+        missing = {
+            k: v for k, v in new.items() if v and not match.get(k) and k not in ("hostname", "seen")
+        }
         match.update(missing)
         counts["updated" if missing else "unchanged"] += 1
     if counts["added"] or counts["updated"]:

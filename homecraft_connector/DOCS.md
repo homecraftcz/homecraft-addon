@@ -131,17 +131,26 @@ a dlaždice jdou pod sebe. Panel má světlý i tmavý vzhled podle systému.
   novější), čas posledního Apply, stav **běží** / **aktualizace čeká na
   technika** / **chyba doplňku** (s hláškou),
   soubory (`packages/hfb_*.yaml`) a síťová zařízení, která používá (ta jsou
-  i ve sloupci **Používá** záložky **Zařízení v síti**). Odkaz **Otevřít projekt
+  i jako odznak u zařízení v záložce **Zařízení v síti**). Odkaz **Otevřít projekt
   v Homecraftu** pošle Homecraft (jen `http`/`https`). Souhrn posílá Homecraft
   po každém Apply a po připojení (operace `features.report`, i během pauzy:
   týká se jen panelu, ne Home Assistantu; v auditu **Features (počet)**).
   Doplněk ho uloží do `/data/features.json` (nejvýš 100 features, delší texty
   odmítne) a panel ho čte při každém načtení.
 - **Zařízení v síti**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
-  v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
-  typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru
+  v síti `*.local`, MAC, webové rozhraní a streamy, poznámka). Řádek ukazuje
+  název, typ, IP a jméno v síti, odznak feature, která zařízení používá, ikonu
+  pro otevření webového rozhraní a tlačítko pro úpravu; prvních 6 řádků,
+  zbytek pod **Zobrazit dalších N**. Filtry s počty: Vše, Nová, Brány Shelly,
+  Kamery, NAS a Ostatní. **Přidat** otevře formulář. Zařízení přidané
+  ze skenu je **nové** (odznak „nové“), dokud ho někdo nepotvrdí: nad
+  seznamem je banner „V síti jsou N nová zařízení – …“ s tlačítky
+  **Prohlédnout** (ukáže jen nová) a **Vše v pořádku** (potvrdí všechna;
+  potvrzení se uloží jako `seen` a přežije restart). Zařízení z dřívějších
+  verzí bez `seen` se berou jako potvrzená, kromě těch ze skenu.
+  **Načíst z HA** nabídne zařízení z registru
   HA a z jeho objevování v síti (DHCP, zeroconf, SSDP); už uložená (stejná IP
-  nebo MAC) jsou označená a nepřidají se znovu. **Doporučený sken** projde
+  nebo MAC) jsou označená a nepřidají se znovu. **Najít v síti** (doporučený sken) projde
   podsíť domácnosti (z Supervisoru `/network/info`; jen soukromá IPv4 nejvýš
   /22) podle profilů Shelly (`/shelly`, jméno `<id>.local`), Kamery (RTSP 554,
   ONVIF 80/8000), NAS (Synology 5000/5001, SMB 445) a Ostatní web (80/443,

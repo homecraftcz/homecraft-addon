@@ -15,6 +15,15 @@
   filtr Vše / Odmítnuté), spojení, pauza a **Posílat chyby technikovi**. Tokeny,
   server, párovací kód a verze doplňku jsou ve sbalené sekci **Pro technika**.
 - Funkce panelu se nemění.
+- **Zařízení v síti** podle nového designu (homecraftcz/homecraft-addon#46):
+  řádky s typem, IP, jménem v síti a odznakem feature, která zařízení používá;
+  filtry Vše / Nová / Brány Shelly / Kamery / NAS / Ostatní s počty; tlačítka
+  **Najít v síti** a **Přidat**; po 6 řádcích **Zobrazit dalších N**.
+- Nová zařízení ze skenu ukazuje banner „V síti jsou N nová zařízení – …“
+  s tlačítky **Prohlédnout** a **Vše v pořádku**. Zůstane, dokud je někdo
+  nepotvrdí, i po restartu doplňku. Seznam zařízení si to pamatuje v poli
+  `seen`; starší seznam se načte beze změny (potvrzená jsou všechna kromě
+  zařízení ze skenu). Počet na dlaždici **Domů** počítá jen nepotvrzená.
 
 ## 0.25.0
 
