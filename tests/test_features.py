@@ -58,7 +58,12 @@ def test_bad_reports_are_refused(report):
 
 
 def test_extended_report_is_stored_capped_and_unknown_keys_kept():
-    circuit = {"instance": "heating_circuit_1", "title": "x" * 600, "valves": [{}] * 300}
+    circuit = {
+        "instance": "heating_circuit_1",
+        "title": "x" * 600,
+        "valves": [{}] * 300,
+        "boiler": {"source_type": "gas", "power_max_kw": "24", "anti_cycling_min": "y" * 600},
+    }
     report = {
         **REPORT,
         "features": [{**HEATING, "id": "heating", "assignment": "heating", "circuits": [circuit]}],
@@ -73,6 +78,9 @@ def test_extended_report_is_stored_capped_and_unknown_keys_kept():
     assert (f["id"], f["assignment"], f["extra"]) == ("heating", "heating", "kept")
     assert len(f["circuits"][0]["title"]) == features.MAX_TEXT
     assert len(f["circuits"][0]["valves"]) == features.MAX_ITEMS
+    boiler = f["circuits"][0]["boiler"]  # homecraft#952
+    assert (boiler["source_type"], boiler["power_max_kw"]) == ("gas", "24")
+    assert len(boiler["anti_cycling_min"]) == features.MAX_TEXT
     assert stored["last_change"] == {
         "at": 1763900000,
         "actor": "Karel",

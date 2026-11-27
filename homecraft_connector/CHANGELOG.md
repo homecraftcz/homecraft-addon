@@ -37,6 +37,10 @@
   (teplota, cíl, fáze, baterie, místnost), **Okna** (stav, jak dlouho je
   otevřené, které hlavice zavře, varování u okna bez hlavice), **Kdy topit**
   a **Kotel** (jen čtení: relé a doběh čerpadla). Stav se čte živě z HA.
+- **Topení › Kotel** ukáže i zdroj tepla, výkon a blokaci taktování
+  z profilu okruhu v Homecraftu (`boiler` v okruhu `features.report`,
+  homecraftcz/homecraft#952). Jen pro čtení a jen hodnoty, které technik
+  vyplnil; starší Homecraft je neposílá a záložka vypadá jako dřív.
 - Majitel v Topení sám nastaví **Připomenout otevřené okno po N min**
   a pravidlo režimu **Počasí** (venkovní teplota s prahem, nebo čas od–do);
   ukládá se do helperů v HA (Enter, opuštění pole, u čísel i chvíli po
