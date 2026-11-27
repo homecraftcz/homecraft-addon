@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import time
 import uuid
 
 import pytest
@@ -35,6 +36,10 @@ def agent():
 def run_panel(agent, monkeypatch):
     """Run `scenario(http)` against the panel, its requests coming from the
     ingress proxy (the test client is 127.0.0.1) unless `from_ingress=False`."""
+
+    # No HA in tests: a fresh cached house name, so no lookup starts.
+    cache = {"value": "Dům Test", "at": time.monotonic(), "task": None}
+    monkeypatch.setattr(panel, "_house_cache", cache)
 
     def run(scenario, from_ingress=True):
         monkeypatch.setattr(settings, "DEV", False)

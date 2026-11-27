@@ -40,7 +40,8 @@ def test_page_and_status(run_panel):
     assert status["connected"] is False and status["paused"] is False
     assert status["token_set"] is False
     assert status["audit_24h"] == {"count": 0, "refused": 0, "capped": False}
-    for tab in ("overview", "features", "network", "security", "audit"):
+    assert status["ha_name"] == "Dům Test"
+    for tab in ("home", "heating", "remote", "devices", "security"):
         assert f'href="#{tab}"' in html and f'data-tab="{tab}"' in html
 
 
@@ -145,13 +146,14 @@ def test_updates_list_and_run(run_panel, agent, monkeypatch):
     assert calls == [("card", "x")] * 5
 
 
-def test_page_has_the_updates_section(run_panel):
+def test_page_has_the_updates_section_at_home(run_panel):
     async def scenario(http):
         return await (await http.get("/")).text()
 
     html = run_panel(scenario)
-    assert 'id="updates"' in html and "<h2>Aktualizace</h2>" in html
-    assert html.index('id="updates"') < html.index("<h2>Spojení</h2>")
+    assert 'id="updates"' in html and ">Aktualizace</h2>" in html
+    home, heating = html.index('data-tab="home"'), html.index('data-tab="heating"')
+    assert home < html.index('id="updates"') < heating
 
 
 def test_page_carries_the_nonce(run_panel):
@@ -198,7 +200,7 @@ def test_error_reports_switch(run_panel, agent, monkeypatch):
 
     fresh, page, no_csrf, bad, on, body, after_on, off = run_panel(scenario)
     assert fresh["error_reports"] is False and fresh["system_log"] == {"state": "off"}
-    assert "Posílat chybová hlášení Homecraftu" in page and 'id="systemLogRestart"' in page
+    assert "Posílat chyby technikovi" in page and 'id="systemLogRestart"' in page
     assert (no_csrf, bad, on) == (403, 400, 200)
     assert body == {
         "ok": True,

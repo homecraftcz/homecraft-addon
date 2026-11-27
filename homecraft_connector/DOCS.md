@@ -7,18 +7,20 @@ Cloudflare). Home Assistant nepotřebuje veřejnou adresu, přesměrování port
 
 1. Spusť doplněk a otevři jeho panel **Homecraft** v postranním menu HA
    (nebo **Otevřít webové rozhraní** u doplňku).
-2. Do **Přístupový token Homecraftu** vlož token, který ti dal Homecraft, a dej **Uložit**.
+2. V záložce **Homecraft a bezpečnost** rozbal **Pro technika**, do
+   **Přístupový token Homecraftu** vlož token, který ti dal Homecraft, a dej **Uložit**.
 3. Nespárovaný doplněk se Homecraftu sám ohlásí jako **žádost o spárování**
-   a panel ukáže odznak **Čeká na schválení v Homecraftu**.
+   a panel (záložka **Homecraft a bezpečnost**) ukáže velký ověřovací kód
+   s odznakem **Čeká na schválení v Homecraftu**.
 4. V Homecraftu porovnej **ověřovací kód** u žádosti (tvar `XXX-XXX`) s kódem
-   nahoře v panelu (je i v **Logu** na řádku `Ověřovací kód: …`). Shodují-li se,
+   v panelu (je i v **Logu** na řádku `Ověřovací kód: …`). Shodují-li se,
    žádost schval. Doplněk to během desítek sekund zkusí znovu a připojí se.
 
 Ověřovací kód je jen otisk veřejného klíče doplňku, žádné tajemství.
 Soukromý klíč zůstává v doplňku (`/data`).
 
 **Záložní cesta** (Homecraft bez žádostí o spárování): párovací kód zkopíruj
-tlačítkem **Kopírovat** (je i v **Logu** na řádku `Párovací kód: …`), v Homecraftu
+tlačítkem **Kopírovat** v **Pro technika** (je i v **Logu** na řádku `Párovací kód: …`), v Homecraftu
 otevři projekt → připojení HA → **Homecraft Connector**, vlož kód do
 **Pairing code** a dej **Pair**. Pak v panelu dej **Připojit znovu**. Párovací
 kód obsahuje jen identifikátor doplňku a jeho veřejný klíč.
@@ -28,7 +30,8 @@ kód obsahuje jen identifikátor doplňku a jeho veřejný klíč.
 Homecraft nastavuje Node-RED, Grafanu, InfluxDB a go2rtc přes jejich ingress.
 Relaci ingressu vytvoří Home Assistant jen správci, proto doplněk potřebuje
 **Token správce Home Assistantu**: v profilu správce → **Zabezpečení** →
-**Dlouhodobé přístupové tokeny** → vytvořit, vložit do panelu a **Uložit**.
+**Dlouhodobé přístupové tokeny** → vytvořit, vložit do panelu (**Homecraft
+a bezpečnost** → **Pro technika**) a **Uložit**.
 Jde jen zadat a smazat, nikdy zobrazit, a doplněk ho používá jen na vytvoření
 relace ingressu (`/ingress/session`); Homecraftu ho nikdy nepošle. Bez něj
 funguje vše ostatní, jen požadavky do doplňků skončí chybou `no_ha_token`.
@@ -56,16 +59,42 @@ startu varuje v logu: **přístupový token jde po síti nešifrovaně**.
 ## Panel
 
 Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
+Mluví k majiteli domu: v hlavičce je logo Homecraft, název domu (název
+Home Assistantu, `location_name`; přejmenování se projeví do 10 minut)
+a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#devices`,
+`#security`; staré odkazy `#overview` a `#features` vedou na **Domů**,
+`#network` na **Zařízení v síti** a `#audit` na **Homecraft a bezpečnost**):
 
-- **Spojení**: připojeno/odpojeno, adresa Homecraftu, čas posledního spojení,
-  poslední chyba a tlačítko **Připojit znovu** (zkusí to hned, bez čekání;
+- **Domů**: dlaždice Spojení, Co máte od Homecraftu (počet features, poslední
+  Apply, čekající aktualizace), Zařízení v síti, Co Homecraft dělal (operace
+  za 24 h a odmítnuté) a Zabezpečení (chybějící tokeny, odkaz otevře **Pro
+  technika**); při odpojení banner **Homecraft teď nemůže do domu** (bez
+  přístupového tokenu místo něj nápověda k jeho zadání, během žádosti
+  o spárování k porovnání ověřovacího kódu); seznam **Co máte od Homecraftu**;
+  **Pozastavit Homecraft**; **Aktualizace**, jen když nějaká čeká.
+- **Topení** a **Vzdálený přístup**: zatím „Připravujeme“.
+- **Zařízení v síti**: seznam síťových zařízení, viz níže.
+- **Homecraft a bezpečnost**: spárování (jen během žádosti o spárování),
+  **Co Homecraft dělal**, **Spojení s Homecraftem** (stav, online od,
+  ověřovací kód, pauza, **Posílat chyby technikovi**) a sbalená sekce
+  **Pro technika** (přístupový token, token správce HA, server s **Připojit
+  znovu**, párovací kód, verze doplňku). Chybí-li přístupový token nebo token
+  správce HA, sekce **Pro technika** se po otevření panelu rozbalí sama.
+
+Na šířce telefonu zůstanou v záložkách jen ikony (u otevřené i název)
+a dlaždice jdou pod sebe. Panel má světlý i tmavý vzhled podle systému.
+
+- **Spojení** (**Pro technika** → **Server**): adresa Homecraftu, čas posledního
+  spojení, poslední chyba a tlačítko **Připojit znovu** (zkusí to hned, bez čekání;
   otevřené spojení ukončí a naváže znovu).
-- **Pozastavit Homecraft**: dokud je zapnuto, doplněk odmítne každý požadavek
+- **Pozastavit Homecraft** (na **Domů** i v **Homecraft a bezpečnost**): dokud je zapnuto, doplněk odmítne každý požadavek
   z Homecraftu chybou `paused` (Plan i Apply v Homecraftu skončí chybou)
   a hned zavře všechna otevřená sezení Homecraftu do Home Assistantu. Spojení
   s Homecraftem zůstává. Pauza přežije restart doplňku.
-- **Spárování**: velký ověřovací kód, odznak **Čeká na schválení v Homecraftu**
-  a pod ním párovací kód s tlačítkem **Kopírovat** (záložní cesta).
+- **Spárování**: během žádosti o spárování velký ověřovací kód s odznakem
+  **Čeká na schválení v Homecraftu**; ověřovací kód je vždy i v **Spojení
+  s Homecraftem**. Párovací kód s tlačítkem **Kopírovat** (záložní cesta) je
+  v **Pro technika**.
 - **Přístupový token Homecraftu**: jde jen zadat, změnit a smazat. Po uložení
   panel ukazuje jen „Token nastaven ✓“; token není vidět v panelu, v nastavení
   doplňku ani v jeho YAML a nepíše se do logu. Uložení i smazání tokenu
@@ -85,7 +114,7 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   otisk tokenu (prvních 16 znaků SHA-256), nikdy token. Nemůže nastavit nic
   jiného než token (adresu serveru ani možnosti ne). Spojení s Homecraftem
   neukládá cookies, takže cookie od Cloudflare Access nikdy nenahradí token.
-- **Aktualizace** (na Přehledu): karty Homecraftu, které Homecraft v HA
+- **Aktualizace** (na **Domů**, jen když nějaká čeká): karty Homecraftu, které Homecraft v HA
   spravuje a má k nim novější verzi (položka, typ, nainstalovaná a dostupná
   verze). Seznam posílá Homecraft po připojení a při každé změně (operace
   `updates.set`, i během pauzy: týká se jen panelu, ne Home Assistantu).
@@ -97,18 +126,18 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   s tlačítkem **Aktualizovat znovu**. Položku, kterou Homecraft nenabízí, nebo
   druhé kliknutí do 5 s Homecraft nenainstaluje a jen pošle aktuální seznam.
   Pozastavený doplněk tlačítka zakáže a nic nepošle.
-- **Features**: co Homecraft nainstaloval do Home Assistantu, jen pro čtení.
-  Dlaždice feature: verze (a dostupná novější), instance, čas posledního
-  Apply, stav **Běží** / **Aktualizace** / **Chyba doplňku** (s hláškou),
+- **Co máte od Homecraftu** (na **Domů**): co Homecraft nainstaloval do Home
+  Assistantu, jen pro čtení. Řádek feature: název, instance, verze (a dostupná
+  novější), čas posledního Apply, stav **běží** / **aktualizace čeká na
+  technika** / **chyba doplňku** (s hláškou),
   soubory (`packages/hfb_*.yaml`) a síťová zařízení, která používá (ta jsou
-  i ve sloupci **Používá** záložky **Síť**). Odkaz **Otevřít projekt
+  i ve sloupci **Používá** záložky **Zařízení v síti**). Odkaz **Otevřít projekt
   v Homecraftu** pošle Homecraft (jen `http`/`https`). Souhrn posílá Homecraft
   po každém Apply a po připojení (operace `features.report`, i během pauzy:
   týká se jen panelu, ne Home Assistantu; v auditu **Features (počet)**).
   Doplněk ho uloží do `/data/features.json` (nejvýš 100 features, delší texty
-  odmítne) a panel ho čte při každém načtení. Na Přehledu je dlaždice
-  **Features** s počtem a počtem dostupných aktualizací.
-- **Síť**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
+  odmítne) a panel ho čte při každém načtení.
+- **Zařízení v síti**: seznam síťových zařízení domácnosti (název, typ, adresa, jméno
   v síti `*.local`, MAC, webové rozhraní a streamy, poznámka) s filtry podle
   typu; přidat, upravit, smazat. **Načíst z HA** nabídne zařízení z registru
   HA a z jeho objevování v síti (DHCP, zeroconf, SSDP); už uložená (stejná IP
@@ -124,9 +153,9 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   (přežije restart). Homecraft ho smí jen přečíst (operace
   `network_devices.get`, v auditu **Síť (feature …)**), změnit ho nesmí;
   jen jednou do něj přenese svá dřívější zařízení (`network_devices.import`).
-  Počet zařízení je i na dlaždici na Přehledu.
-- **Chybová hlášení** (na Přehledu, ve výchozím stavu vypnuto): přepínač
-  **Posílat chybová hlášení Homecraftu** je souhlas zákazníka. Dokud je vypnutý,
+  Počet zařízení je i na dlaždici na **Domů**.
+- **Posílat chyby technikovi** (v **Homecraft a bezpečnost**, ve výchozím
+  stavu vypnuto): přepínač je souhlas zákazníka. Dokud je vypnutý,
   doplněk v Home Assistantu žádné události neodebírá. Zapnutý odebírá
   `homecraft_error` (chyby z Node-RED) a `system_log_event` úrovně `ERROR`
   a `CRITICAL`, ale jen z automatizací a skriptů Homecraftu: logger
@@ -168,7 +197,11 @@ Panel je dostupný jen přes Home Assistant (ingress), nikde jinde neposlouchá.
   hlášení v jedné zprávě). Bez spojení s Homecraftem nebo při pauze doplněk
   události neodebírá a čekající hlášení zahodí, nic se neukládá na disk ani
   do logu. Nastavení přežije restart.
-- **Audit**: posledních 200 operací (čas, operace, cíl, výsledek, trvání).
+- **Co Homecraft dělal** (audit): posledních 200 operací, filtr **Vše** /
+  **Odmítnuté**. Řádek: čas, operace česky (např. „Ovládal zařízení
+  climate.set_temperature“, „Zapsal soubor“), pod ní cíl a výsledek
+  **provedeno** / **odmítnuto doplňkem** / **pozastaveno** / chyba (trvání
+  v nápovědě výsledku).
   Cíl je typ příkazu WebSocketu, metoda a cesta HTTP nebo cesta souboru,
   u odeslané zprávy s chybovými hlášeními (`errors.report`) jen počet hlášení a jejich kódy,
   nikdy obsah souborů, těla požadavků, stopa, zpráva ani tokeny. Soubor `/data/audit.jsonl`
@@ -187,11 +220,11 @@ dashboardy, `reload` služby, `scheduler.edit`, doplňky Node-RED, go2rtc,
 InfluxDB a Grafana), několik REST adres (kontrola konfigurace, config flow
 integrací, které zakládá Apply: InfluxDB, SQL, Speedtest, Ping, Holiday,
 System Monitor, Scheduler a Browser Mod; Ping jen na `1.1.1.1` nebo na zařízení
-uložené v záložce **Síť**) a soubory jen v `packages/`,
+uložené v záložce **Zařízení v síti**) a soubory jen v `packages/`,
 `custom_templates/` a `themes/` (`configuration.yaml` jen ke čtení). Cokoli
 jiného odmítne s chybou `not_allowed`.
 
-Seznam síťových zařízení ze záložky **Síť** smí Homecraft jen přečíst
+Seznam síťových zařízení ze záložky **Zařízení v síti** smí Homecraft jen přečíst
 (`network_devices.get`): adresy, URL, MAC a poznámky, žádná hesla. Požadavek
 nese název feature, která adresu potřebuje; ten se zapíše do auditu.
 Jedinou výjimkou je jednorázový přesun dřívějšího seznamu z Homecraftu
