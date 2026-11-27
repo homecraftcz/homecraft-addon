@@ -349,6 +349,7 @@ input.num { width: 88px; text-align: right; font-weight: 700; font-variant-numer
         <button type="button" role="tab" data-sub="rule">Kdy topit</button>
         <button type="button" role="tab" data-sub="boiler">Kotel</button>
       </div>
+      <div id="heatMsg" class="msg"></div>
       <div id="circMsg" class="msg"></div>
       <div class="rows" data-sub="valves" role="tabpanel" id="valveRows"></div>
       <div class="stack sm" data-sub="windows" role="tabpanel">
@@ -1065,18 +1066,24 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) refr
 // --- Topení (#48): circuits from /api/house, the selected one from /api/heating
 let circ = null;        // the selected circuit's instance
 let circData = null;    // its /api/heating detail
+let heatLast = null;    // the last good house.heating: kept while HA does not answer
 let subTab = "valves";
+const HEAT_EMPTY = $("heatEmptyText").textContent;
 const PHASE = { fast: "rychlý start", run: "doběh", overrun: "doběh čerpadla", closed: "zavřeno" };
 const MODE = { on: "Zapnuto", off: "Vypnuto", by_weather: "Počasí" };
 const RELAY = { on: "Zapnuto", off: "Vypnuto", unavailable: "Nedostupné" };
 const temp = (n) => n == null ? "–" : n.toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " °C";
 
 function renderCircuits() {
-  const h = house.heating;
-  const list = h ? h.circuits : [];
+  // A failed /api/house (error, no heating) keeps the last circuits on screen;
+  // no heating without an error (none reported) clears them.
+  if (house.heating) heatLast = house.heating;
+  else if (!house.error) heatLast = null;
+  const list = heatLast ? heatLast.circuits : [];
   $("heatMain").hidden = !list.length;
   $("heatEmpty").hidden = list.length > 0;
-  if (house.error) $("heatEmptyText").textContent = house.error;
+  $("heatEmptyText").textContent = house.error || HEAT_EMPTY;
+  show("heatMsg", list.length && house.error ? house.error : "", true);
   if (!list.some((c) => c.instance === circ)) { circ = list.length ? list[0].instance : null; circData = null; }
   $("circList").replaceChildren(...list.map((c) => {
     const b = document.createElement("button");
@@ -1098,19 +1105,24 @@ function renderCircuits() {
   }));
 }
 
-let circPending = false;
-async function refreshCircuit() {
-  if (!circ || circPending || location.hash !== "#heating" || document.hidden) return;
-  circPending = true;
-  const asked = circ;
-  try {
-    const d = await call("GET", "api/heating?circuit=" + encodeURIComponent(asked));
-    if (asked === circ) { circData = d; show("circMsg", ""); }
-  } catch (e) {
-    if (asked === circ) show("circMsg", "Okruh se nepodařilo načíst: " + e.message, true);
-  } finally {
-    circPending = false;
-  }
+// One load at a time; callers share (and may await) the running one.
+let circLoad = null;
+function refreshCircuit() {
+  if (!circ || location.hash !== "#heating" || document.hidden) return Promise.resolve();
+  circLoad ??= loadCircuit().finally(() => { circLoad = null; });
+  return circLoad;
+}
+async function loadCircuit() {
+  let asked;
+  do {  // another circuit picked meanwhile: load that one too
+    asked = circ;
+    try {
+      const d = await call("GET", "api/heating?circuit=" + encodeURIComponent(asked));
+      if (asked === circ) { circData = d; show("circMsg", ""); }
+    } catch (e) {
+      if (asked === circ) show("circMsg", "Okruh se nepodařilo načíst: " + e.message, true);
+    }
+  } while (circ && asked !== circ);
   renderCircuit();
 }
 window.addEventListener("hashchange", refreshCircuit);
@@ -1131,7 +1143,7 @@ function valveRow(v) {
   if (v.battery != null) {
     const bat = document.createElement("span");
     bat.textContent = "baterie " + num(v.battery) + " %";
-    if (house.heating && v.battery < house.heating.low_battery_threshold) bat.className = "lowbat";
+    if (heatLast && v.battery < heatLast.low_battery_threshold) bat.className = "lowbat";
     m.append(" · ", bat);
   }
   const body = document.createElement("div");
@@ -1166,7 +1178,7 @@ function setInput(id, value) {
 function renderCircuit() {
   for (const b of $("subTabs").children) b.setAttribute("aria-selected", String(b.dataset.sub === subTab));
   for (const p of document.querySelectorAll("[role=tabpanel][data-sub]")) p.hidden = p.dataset.sub !== subTab;
-  const c = (house.heating ? house.heating.circuits : []).find((x) => x.instance === circ);
+  const c = (heatLast ? heatLast.circuits : []).find((x) => x.instance === circ);
   $("circH").textContent = c ? c.name : "";
   $("circDot").className = "dot" + (c && c.heating ? " heat" : "");
   const d = circData;
@@ -1209,28 +1221,65 @@ function renderCircuit() {
 
 for (const b of $("subTabs").children) b.onclick = () => { subTab = b.dataset.sub; renderCircuit(); };
 
-async function saveHelper(key, value) {
+// One POST per key at a time; a newer value waits and goes after it.
+const saving = {};  // key -> true while its POST runs
+const queued = {};  // key -> [circuit, value, input] to save after it
+async function saveHelper(circuit, key, value, input) {
+  if (saving[key]) { queued[key] = [circuit, value, input]; return; }
+  saving[key] = true;
   show("helperMsg", "Ukládám…");
   try {
-    const r = await call("POST", "api/heating/helper", { circuit: circ, key, value });
-    if (circData) circData.helpers[key] = key.startsWith("time_") ? r.value.slice(0, 5) : r.value;
+    const r = await call("POST", "api/heating/helper", { circuit, key, value });
+    // Only for the circuit still shown; another one's detail loads by itself.
+    if (circuit === circ && circData && circData.instance === circuit) {
+      circData.helpers[key] = key.startsWith("time_") ? r.value.slice(0, 5) : r.value;
+    }
     show("helperMsg", "Uloženo");
   } catch (e) {
     show("helperMsg", "Neuloženo: " + e.message, true);
-    refreshCircuit();  // back to what HA has
+    await refreshCircuit();  // back to what HA has, in this field even while it has focus
+    if (input && circuit === circ && circData) {
+      const v = circData.helpers[key];
+      input.value = v == null ? "" : String(v);
+    }
+  } finally {
+    saving[key] = false;
   }
   renderCircuit();
+  if (queued[key]) {
+    const next = queued[key];
+    delete queued[key];
+    saveHelper(...next);
+  }
+}
+
+// Numbers save on Enter, on leaving the field or 800 ms after the last change;
+// times on Enter or on leaving the field. An unchanged value is not sent.
+const timers = {};
+function flush(input) {
+  const key = input.dataset.key;
+  clearTimeout(timers[key]);
+  if (input.disabled || !circData) return;
+  if (!input.value || !input.checkValidity()) {
+    show("helperMsg", "Zadejte " + (input.type === "time" ? "čas" : "číslo od " + input.min + " do " + input.max + " po " + input.step), true);
+    return;
+  }
+  const value = input.type === "number" ? Number(input.value) : input.value;
+  if (value !== circData.helpers[key]) saveHelper(circ, key, value, input);
 }
 for (const input of document.querySelectorAll("input[data-key]")) {
-  input.onchange = () => {
-    if (!input.value || !input.checkValidity()) {
-      show("helperMsg", "Zadejte " + (input.type === "time" ? "čas" : "číslo od " + input.min + " do " + input.max + " po " + input.step), true);
-      return;
-    }
-    saveHelper(input.dataset.key, input.type === "number" ? Number(input.value) : input.value);
-  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") flush(input); });
+  input.addEventListener("blur", () => flush(input));
+  if (input.type === "number") {
+    input.addEventListener("input", () => {
+      clearTimeout(timers[input.dataset.key]);
+      timers[input.dataset.key] = setTimeout(() => flush(input), 800);
+    });
+  }
 }
-for (const b of document.querySelectorAll("[data-rule]")) b.onclick = () => saveHelper("auto_rule", b.dataset.rule);
+for (const b of document.querySelectorAll("[data-rule]")) b.onclick = () => {
+  if (circData && b.dataset.rule !== circData.helpers.auto_rule) saveHelper(circ, "auto_rule", b.dataset.rule);
+};
 
 async function refresh() {
   try {

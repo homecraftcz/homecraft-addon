@@ -77,6 +77,29 @@ def test_detail():
     assert d["boiler"] == {"relay": "unavailable", "overrun": 10.0}
 
 
+@pytest.mark.parametrize(
+    ("url", "got"),
+    [
+        ("/hfb-features/heating", "/hfb-features/heating"),
+        ("/lovelace/0?x=1#y", "/lovelace/0?x=1#y"),
+        ("//evil.example/x", "/lovelace"),
+        ("/\\evil.example", "/lovelace"),
+        ("/\t/evil.example", "/lovelace"),
+        ("/\n/evil.example", "/lovelace"),
+        ("\t//evil.example", "/lovelace"),
+        ("https://evil.example/", "/lovelace"),
+        ("javascript:alert(1)", "/lovelace"),
+        ("/a\x00b", "/lovelace"),
+        ("hfb-features/heating", "/lovelace"),
+        ("", "/lovelace"),
+        (5, "/lovelace"),
+    ],
+)
+def test_dashboard_url_stays_in_ha(url, got):
+    states = _by_id([_state(f"binary_sensor.heating_state_{C1}", "on", url=url)])
+    assert house.detail({"instance": C1}, states, {})["dashboard_url"] == got
+
+
 def test_detail_without_helpers_and_with_a_foreign_url():
     states = _by_id([_state(f"binary_sensor.heating_state_{C1}", "on", url="//evil.example/x")])
     d = house.detail({"instance": C1, "valves": [{"entity_id": "climate.x"}]}, states, {})
@@ -114,6 +137,8 @@ def test_allowed_values(key, value, service, data):
         (C1, "window_reminder", True),
         (C1, "window_reminder", "20"),
         (C1, "window_reminder", float("nan")),
+        (C1, "window_reminder", 10**400),  # math.isfinite would raise OverflowError
+        (C1, "weather_threshold", float("inf")),
         (C1, "weather_threshold", 15.2),  # step 0.5
         (C1, "weather_threshold", 4.5),
         (C1, "weather_threshold", 25.5),
@@ -137,6 +162,13 @@ def _fake_core(calls, status=200):
     async def states(request):
         return web.json_response(DETAIL_STATES)
 
+    async def one_state(request):
+        assert request.headers["Authorization"] == "Bearer t0k"
+        state = _by_id(DETAIL_STATES).get(request.match_info["entity_id"])
+        return web.json_response(
+            state or {"message": "Entity not found."}, status=200 if state else 404
+        )
+
     async def service(request):
         assert request.headers["Authorization"] == "Bearer t0k"
         path = f"{request.match_info['domain']}/{request.match_info['service']}"
@@ -157,6 +189,7 @@ def _fake_core(calls, status=200):
 
     app = web.Application()
     app.router.add_get("/api/states", states)
+    app.router.add_get("/api/states/{entity_id}", one_state)
     app.router.add_post("/api/services/{domain}/{service}", service)
     app.router.add_get("/ws", websocket)
     return app
@@ -220,7 +253,7 @@ def test_helper_endpoint_calls_the_service(run_panel, monkeypatch):
     audit.flush()
     entries = audit.recent()
     assert entries[-1]["op"] == "panel.helper" and entries[-1]["ok"]
-    assert entries[-1]["target"] == f"input_number.heating_window_reminder_{C1} = 20.0"
+    assert entries[-1]["target"] == f"{C1} window_reminder"  # never the value
 
 
 def test_helper_endpoint_refuses(run_panel, monkeypatch):
@@ -232,11 +265,23 @@ def test_helper_endpoint_refuses(run_panel, monkeypatch):
         _post({"circuit": C1, "key": "weather_threshold", "value": 30}),
         _post({"circuit": C1, "key": "auto_rule"}),
         _post({"circuit": ["x"], "key": "auto_rule", "value": "time"}),
+        _post({"circuit": C1, "key": "window_reminder", "value": 10**400}),
     ]
     got = run_panel(_scenario(monkeypatch, calls, steps))
-    assert [s for s, _ in got] == [400] * 6
+    assert [s for s, _ in got] == [400] * 7
     assert calls == []
     assert audit.recent() == []
+
+
+def test_helper_endpoint_missing_helper(run_panel, monkeypatch):
+    """A reported circuit whose helper HA does not have: 409, no service call
+    (HA would answer 200 and change nothing)."""
+    calls = []
+    steps = [_post({"circuit": "heating_circuit_2", "key": "window_reminder", "value": 20})]
+    [(status, body)] = run_panel(_scenario(monkeypatch, calls, steps))
+    assert status == 409 and "chybí" in json.loads(body)["error"]
+    assert calls == []
+    assert audit.recent()[0]["code"] == "not_found"
 
 
 def test_helper_endpoint_ha_refuses(run_panel, monkeypatch):

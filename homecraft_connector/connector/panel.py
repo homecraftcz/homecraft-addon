@@ -408,19 +408,30 @@ async def _heating_helper(request: web.Request) -> web.Response:
     value = await _json_field(request, "value", object)
     if _circuit(instance) is None:
         return web.json_response({"ok": False, "error": "Okruh není v souhrnu"}, status=400)
+    # The audit names the circuit and the key, never the value (audit.py: no payloads).
+    target = f"{instance} {key}"
     try:
         data = await house.set_helper(instance, key, value)
     except ValueError as e:
         return web.json_response({"ok": False, "error": f"Neplatná hodnota: {e}"}, status=400)
+    except LookupError as e:
+        audit.record("panel.helper", target, False, "not_found")
+        logger.warning("Helper %s v HA chybí", e)
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "Tohle nastavení v Home Assistantu chybí; technik ho doplní Apply",
+            },
+            status=409,
+        )
     except policy.OpError as e:
-        entity_id = house.HELPERS[key][0] + instance
-        audit.record("panel.helper", entity_id, False, e.code)
-        logger.warning("Nastavení %s selhalo: %s %s", entity_id, e.code, e.message)
+        audit.record("panel.helper", target, False, e.code)
+        logger.warning("Nastavení %s selhalo: %s %s", target, e.code, e.message)
         return web.json_response(
             {"ok": False, "error": f"Home Assistant neodpověděl ({e.code})"}, status=502
         )
     value = next(v for k, v in data.items() if k != "entity_id")
-    audit.record("panel.helper", f"{data['entity_id']} = {value}", True)
+    audit.record("panel.helper", target, True)
     logger.info("V panelu nastaveno %s = %s", data["entity_id"], value)
     return web.json_response({"ok": True, "value": value})
 

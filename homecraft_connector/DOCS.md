@@ -110,10 +110,13 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
   `input_number.heating_weather_threshold_<okruh>`,
   `input_select.heating_auto_rule_<okruh>`,
   `input_datetime.heating_time_from_<okruh>` a `heating_time_to_<okruh>`);
-  panel je uloží hned po změně a potvrdí „Uloženo“. Doplněk smí přes panel
-  nastavit jen těchto pět helperů okruhů, které Homecraft nahlásil
-  v souhrnu, a jen v jejich rozsahu; jiné entity ani služby panel nevolá.
-  Každá změna je v **Co Homecraft dělal** (`panel.helper`).
+  panel je uloží po Enter, po opuštění pole a u čísel i chvíli (0,8 s) po
+  poslední změně, a potvrdí „Uloženo“. Když uložení selže, vrátí do pole
+  hodnotu z HA. Doplněk smí přes panel nastavit jen těchto pět helperů
+  okruhů, které Homecraft nahlásil v souhrnu, a jen v jejich rozsahu; jiné
+  entity ani služby panel nevolá. Když helper v HA chybí, panel to řekne
+  a nic neuloží (technik ho doplní Apply). Každá změna je v **Co Homecraft
+  dělal** (`panel.helper`, okruh a klíč, bez hodnoty).
   **Co dělá technik**: hlavice, okna a čidla, místnosti, názvy, kotel
   a rozvrhy (rozvrhy, programy a teploty mění majitel na kartě topení v HA).
   Stav se čte živě z HA, když je záložka otevřená (každých 30 s).

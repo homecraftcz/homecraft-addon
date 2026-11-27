@@ -10,6 +10,7 @@ import math
 import re
 import time
 from datetime import datetime
+from urllib.parse import urlsplit
 
 import aiohttp
 
@@ -208,7 +209,9 @@ SLUG = re.compile(r"[a-z0-9_]{1,100}")
 def _in_range(low: float, high: float, step: float):
     def check(value: object) -> float:
         ok = isinstance(value, (int, float)) and not isinstance(value, bool)
-        if not ok or not math.isfinite(value) or not low <= value <= high:
+        # The range first: it also refuses NaN, inf and a huge int (which
+        # math.isfinite or float() would raise OverflowError on).
+        if not ok or not low <= value <= high:
             raise ValueError(f"a number {low:g}–{high:g}")
         if abs((value - low) / step - round((value - low) / step)) > 1e-9:
             raise ValueError(f"a step of {step:g}")
@@ -273,24 +276,41 @@ def helper_call(instance: str, key: str, value: object) -> tuple[str, dict]:
 
 async def set_helper(instance: str, key: str, value: object) -> dict:
     """Calls the helper's service over HA's REST API as the add-on; returns the
-    service data. ValueError on bad input, policy.OpError when HA refuses or does
-    not answer. The caller checks that `instance` is a reported circuit."""
+    service data. ValueError on bad input, LookupError when HA has no such
+    helper (a service call on a missing entity succeeds doing nothing),
+    policy.OpError when HA refuses or does not answer. The caller checks that
+    `instance` is a reported circuit."""
     service, data = helper_call(instance, key, value)
+    headers = {"Authorization": f"Bearer {settings.SUPERVISOR_TOKEN}"}
     try:
-        async with (
-            aiohttp.ClientSession() as http,
-            http.post(
-                f"{settings.CORE_HTTP_URL}/api/services/{service}",
-                json=data,
-                headers={"Authorization": f"Bearer {settings.SUPERVISOR_TOKEN}"},
-                timeout=selfcheck.TIMEOUT,
-            ) as r,
-        ):
-            if r.status != 200:
-                raise policy.OpError("ha_failed", f"{service}: HTTP {r.status}")
+        async with aiohttp.ClientSession(headers=headers, timeout=selfcheck.TIMEOUT) as http:
+            async with http.get(f"{settings.CORE_HTTP_URL}/api/states/{data['entity_id']}") as r:
+                if r.status == 404:
+                    raise LookupError(data["entity_id"])
+                if r.status != 200:
+                    raise policy.OpError("ha_failed", f"/api/states: HTTP {r.status}")
+            async with http.post(
+                f"{settings.CORE_HTTP_URL}/api/services/{service}", json=data
+            ) as r:
+                if r.status != 200:
+                    raise policy.OpError("ha_failed", f"{service}: HTTP {r.status}")
     except (aiohttp.ClientError, TimeoutError) as e:
         raise policy.OpError("ha_unreachable", type(e).__name__) from None
     return data
+
+
+def _local_path(url: object) -> str:
+    """A path in HA (the circuit's dashboard view) or "": never another origin.
+    Browsers drop tabs and newlines from a URL and read "\\" as "/", so
+    "/\\evil.example" or "/\\t/evil.example" would leave the site."""
+    if not isinstance(url, str):
+        return ""
+    url = re.sub(r"[\t\n\r]", "", url)
+    if "\\" in url or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in url):
+        return ""
+    parts = urlsplit(url)
+    ok = not parts.scheme and not parts.netloc and parts.path.startswith("/")
+    return url if ok and not url.startswith("//") else ""
 
 
 def _since(state: dict) -> float | None:
@@ -334,9 +354,7 @@ def detail(circuit: dict, states: dict[str, dict], devices: dict[str, str]) -> d
         w["open_since"] = min((t for t in opened if t is not None), default=None)
         w["valves"] = [names.get(e, e) for e in _ids(reported.get("valves"))]
     attrs = (states.get(f"binary_sensor.heating_state_{instance}") or {}).get("attributes")
-    url = attrs.get("url") if isinstance(attrs, dict) else None
-    # A path in HA (the circuit's dashboard view), never another origin.
-    url = url if isinstance(url, str) and url.startswith("/") and not url.startswith("//") else ""
+    url = _local_path(attrs.get("url") if isinstance(attrs, dict) else None)
     weather_ok = (states.get(f"binary_sensor.heating_weather_ok_{instance}") or {}).get("state")
     return {
         **c,

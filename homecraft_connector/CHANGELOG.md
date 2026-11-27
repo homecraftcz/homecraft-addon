@@ -40,10 +40,11 @@
   a **Kotel** (jen čtení: relé a doběh čerpadla). Stav se čte živě z HA.
 - Majitel v Topení sám nastaví **Připomenout otevřené okno po N min**
   a pravidlo režimu **Počasí** (venkovní teplota s prahem, nebo čas od–do);
-  ukládá se hned do helperů v HA a panel potvrdí „Uloženo“. Nový
-  `POST /api/heating/helper` smí měnit jen těchto pět helperů okruhů, které
-  Homecraft nahlásil, s kontrolou rozsahu a kroku; každá změna je v auditu
-  jako `panel.helper`.
+  ukládá se do helperů v HA (Enter, opuštění pole, u čísel i chvíli po
+  poslední změně) a panel potvrdí „Uloženo“. Nový `POST /api/heating/helper`
+  smí měnit jen těchto pět helperů okruhů, které Homecraft nahlásil,
+  s kontrolou rozsahu a kroku, a jen když helper v HA existuje; každá změna
+  je v auditu jako `panel.helper` (okruh a klíč, bez hodnoty).
 - Souhrn features od Homecraftu (`features.report`) si pamatuje i nová pole
   z homecraftcz/homecraft#945 a #947 (`id`, `assignment`, okruhy topení,
   nastavení Tailscale, `last_change`, `technician`,
