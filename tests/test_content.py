@@ -181,6 +181,23 @@ def test_refused_second_round(text, refused):
     assert content.check_yaml("packages/x.yaml", text) == refused
 
 
+def test_browser_mod_javascript_is_refused_everywhere():
+    """#24: any JS in every browser Browser Mod knows; the library no longer uses it."""
+    code = {"code": "alert(1)"}
+    assert (
+        content.check_automation_body(
+            json.dumps({"actions": [{"action": "browser_mod.javascript", "data": code}]}).encode()
+        )
+        == "action: browser_mod.javascript"
+    )
+    for service in ("browser_mod.javascript", " Browser_Mod.JavaScript", "browser_mod.{{ s }}"):
+        tap = {"action": "fire-dom-event", "browser_mod": {"service": service, "data": code}}
+        bad = {"views": [{"cards": [{"type": "button", "tap_action": tap}]}]}
+        assert content.check_dashboard(bad) == f"service: {service}"
+        assert content.check_dashboard(bad, bad) is None  # the user's own card stays
+    assert not content.service_refused("browser_mod.popup")  # the rest of Browser Mod passes
+
+
 def test_the_librarys_services_pass():
     ok = "influxdb:\n  include: {entity_globs: [sensor.hfb_ltm_*]}\n  ignore_attributes: [icon]\n"
     assert content.check_yaml("packages/x.yaml", ok) is None

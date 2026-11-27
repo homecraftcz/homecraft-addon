@@ -64,6 +64,7 @@ FORBIDDEN_SERVICES = frozenset(
         "homeassistant.restart",
         "recorder.disable",
         "recorder.purge*",
+        "browser_mod.javascript",  # any JS in every browser Browser Mod knows, an admin's too (#24)
     }
 )
 SERVICE_KEYS = ("action", "service", "service_template", "perform_action")

@@ -523,10 +523,10 @@ program, musí ve stejném PR upravit `apparmor.txt` a ověřit ho na HA OS
   zapíše jakýkoli JavaScript, aktualizujte).
 - Integrace z Marketplace / HACS jsou připnuté jen tagem vydání, ne obsahem:
   kdyby autor tag v repozitáři přesunul, Marketplace / HACS stáhne nový obsah.
-- Služba Browser Mod `browser_mod.javascript` spouští JavaScript v
-  prohlížečích registrovaných v Browser Mod. Vzhled Mushroom feature Topení ji
-  dnes zapisuje do `custom_templates/` a doplněk její kód zatím neomezuje
-  (později povolí jen přesné úryvky z knihovny).
+- Služba Browser Mod `browser_mod.javascript` (JavaScript v prohlížečích
+  registrovaných v Browser Mod) se od verze po 0.25.0 odmítne v automatizacích,
+  skriptech, balíčcích, dashboardech i v Node-RED. Topení ji používalo jen ve
+  vzhledu Mushroom, ten od heating 1.21.0-beta.1 není.
 
 **Rotace klíče**: doplněk přijímá víc klíčů pro podpis karet. Nový klíč přijde
 s novou verzí doplňku, starý se odebere v některé další (při úniku hned).
