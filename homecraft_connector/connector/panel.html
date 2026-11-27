@@ -226,6 +226,9 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
   <div data-tab="home" class="stack">
     <div class="alert warn" id="offlineBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4z"/><path d="M12 10v4M12 17.5v.01"/></svg>
       <div><b id="bannerTitle"></b> <span id="bannerText"></span></div></div>
+    <div class="alert warn" id="haTokenBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"/></svg>
+      <div class="grow"><b>Chybí token správce HA.</b> Homecraft bez něj neotevře doplňky jako Node-RED nebo Grafana.</div>
+      <a class="sb" href="#security" id="haTokenLink">Doplnit</a></div>
     <div class="alert err" id="batteryBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M6 10v4"/></svg>
       <div class="grow"><b id="batteryTitle"></b> <span id="batteryText"></span></div>
       <a class="sb" href="#heating">Ukázat</a></div>
@@ -652,6 +655,8 @@ async function refreshStatus() {
   $("tokenPending").hidden = !s.token_pending;
   $("haTokenSet").hidden = !s.ha_token_set;
   $("haTokenForm").hidden = s.ha_token_set;
+  // Without the access token the offline banner already says what to do.
+  $("haTokenBanner").hidden = s.ha_token_set || !s.token_set;
   $("tokenUpdated").textContent = "(aktualizován " + fmtTime(s.token_updated_at) + " Homecraftem)";
 
   const a = s.audit_24h;
@@ -879,7 +884,8 @@ function renderHouse() {
   if (low.length) {
     const b = low[0];
     $("batteryTitle").textContent = "Slabá baterie " + (b.kind === "window" ? "v okenním čidle " : "v hlavici ")
-      + b.name + " (" + num(b.battery) + " %)" + (low.length > 1 ? " a " + (low.length - 1) + " další." : ".");
+      + b.name + " (" + num(b.battery) + " %)"
+      + (low.length > 1 ? " a " + (low.length - 1) + plural(low.length - 1, " další", " další", " dalších") + "." : ".");
     $("batteryText").textContent = low.length > 1 ? "Vyměňte baterie co nejdřív." : "Vyměňte ji co nejdřív.";
   }
   const winOpen = h ? h.windows_open : 0;
@@ -898,7 +904,8 @@ function renderHouse() {
   const unit = document.createElement("span");
   unit.className = "unit";
   unit.textContent = h.valves_heating + " z " + h.valves;
-  $("tHeat").replaceChildren(h.valves_heating ? "Topí " : "Netopí ", unit);
+  // The headline follows the circuits (binary_sensor.heating_state_*), like the text below it.
+  $("tHeat").replaceChildren(h.circuits_heating ? "Topí " : "Netopí ", unit);
   const circuits = h.circuits.map((c) => c.name + (c.heating ? " topí" : " v útlumu")).join(", ");
   $("tHeatSub").textContent = [circuits, h.outdoor != null && "venku " + num(h.outdoor) + " °C"]
     .filter(Boolean).join(" · ");
@@ -906,18 +913,20 @@ function renderHouse() {
 
 // The Vzdálený přístup tile and Váš technik, from the features report (homecraft#945, #947).
 function renderRemoteAndTech() {
-  const ts = feats.features.find((f) => f.id === "tailscale");
-  $("tRemote").textContent = ts ? "Zapnuto" : "Vypnuto";
-  $("tRemoteDot").className = "dot" + (ts ? " okd" : "");
-  const tailnet = ts && ts.settings && ts.settings.tailnet;
-  $("tRemoteSub").textContent = ts ? (tailnet || "Adresu doplní technik")
+  // An older report has no `id`: the name tells.
+  const ts = feats.features.find((f) => f.id ? f.id === "tailscale" : /tailscale/i.test(f.name));
+  const broken = ts && ts.status === "addon_error";
+  $("tRemote").textContent = !ts ? "Vypnuto" : broken ? "Chyba doplňku" : "Zapnuto";
+  $("tRemoteDot").className = "dot" + (ts && !broken ? " okd" : "");
+  const tailnet = ts && !broken && ts.settings && ts.settings.tailnet;
+  $("tRemoteSub").textContent = broken ? ts.error || "Technik o chybě ví z Homecraftu"
+    : ts ? (tailnet || "Adresu doplní technik")
     : feats.remote_access_requested_at ? "Požádáno " + fmtTime(feats.remote_access_requested_at)
     : "Zapnete v záložce Vzdálený přístup";
   $("tRemoteSub").className = "meta" + (tailnet ? " mono" : "");
   $("techName").textContent = feats.technician ? feats.technician + " · Homecraft" : "Homecraft";
   const lc = feats.last_change;
-  $("techLast").textContent = lc && lc.at ? new Date(lc.at * 1000).toLocaleString("cs-CZ",
-    { day: "numeric", month: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
+  $("techLast").textContent = lc && lc.at ? fmtTime(lc.at) : "–";
   $("techLastSub").textContent = lc ? [lc.actor !== feats.technician && lc.actor, lc.feature, lc.instance]
     .filter(Boolean).join(" · ") : "Ukáže se po prvním Apply";
 }
@@ -943,15 +952,22 @@ async function refreshFeatures() {
   renderDevices();  // the Používá column
 }
 
-// Every 30 s, not with refresh(): it reads all of HA's states.
+// Every 30 s, not with refresh(): it reads all of HA's states. Not while the
+// page is hidden or the previous request still runs.
+let housePending = false;
 async function refreshHouse() {
+  if (document.hidden || housePending) return;
+  housePending = true;
   try {
     house = await call("GET", "api/house");
   } catch (e) {
     house = { heating: null, low_batteries: [], error: "Stav domu se nepodařilo načíst: " + e.message };
+  } finally {
+    housePending = false;
   }
   renderHouse();
 }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshHouse(); });
 
 async function refresh() {
   try {
@@ -981,6 +997,11 @@ $("paused").onchange = $("paused2").onchange = async (ev) => {
     both(e.message, true);
   }
   refresh();
+};
+
+$("haTokenLink").onclick = () => {
+  $("tech").open = true;
+  setTimeout(() => $("tech").scrollIntoView({ block: "start" }), 0);
 };
 
 $("errorReports").onchange = async (ev) => {

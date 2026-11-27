@@ -4,12 +4,15 @@ read only. The circuits (valves, windows) come from Homecraft's features.report
 `GET /api/states` once per request, the entity registry (for the battery
 entity on a valve's or window sensor's device) over WS, cached ENTITY_TTL s."""
 
+import logging
 import math
 import time
 
 import aiohttp
 
 from . import network_discovery, policy, selfcheck, settings
+
+logger = logging.getLogger(__name__)
 
 ENTITY_TTL = 60.0
 LOW_BATTERY_HELPER = "input_number.heating_low_battery_threshold"
@@ -78,8 +81,14 @@ def _batteries(states: dict[str, dict], devices: dict[str, str]) -> dict[str, fl
         attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
         level = _num(s.get("state"))
         if attrs.get("device_class") == "battery" and level is not None and eid in devices:
-            out[devices[eid]] = level
+            device = devices[eid]
+            out[device] = min(level, out.get(device, level))  # several sensors: the lowest
     return out
+
+
+def _name(*values) -> str:
+    """The first non-empty text; a non-text (bad report) never shows."""
+    return next((v for v in values if isinstance(v, str) and v), "")
 
 
 def _outdoor(states: dict[str, dict]) -> float | None:
@@ -107,7 +116,10 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
 
     out = []
     for c in _items(circuits):
-        name = c.get("heading") or c.get("title") or c.get("instance") or ""
+        instance = c.get("instance")
+        if not isinstance(instance, str) or not instance:
+            continue
+        name = _name(c.get("heading"), c.get("title"), instance)
         valves = []
         for v in _items(c.get("valves")):
             eid = v.get("entity_id")
@@ -115,7 +127,7 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
                 continue
             s = states.get(eid) or {}
             attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
-            vname = v.get("name") or attrs.get("friendly_name") or eid
+            vname = _name(v.get("name"), attrs.get("friendly_name"), eid)
             valves.append(
                 {
                     "entity_id": eid,
@@ -130,7 +142,7 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
         windows = []
         for w in _items(c.get("windows")):
             sensors = _ids(w.get("sensors"))
-            wname = w.get("name") or w.get("key") or ""
+            wname = _name(w.get("name"), w.get("key"))
             for eid in sensors:
                 battery(eid, wname, "window", name)
             windows.append(
@@ -139,7 +151,7 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
                     "open": any((states.get(e) or {}).get("state") == "on" for e in sensors),
                 }
             )
-        demand = (states.get(f"binary_sensor.heating_state_{c.get('instance')}") or {}).get("state")
+        demand = (states.get(f"binary_sensor.heating_state_{instance}") or {}).get("state")
         heating = any(v["hvac_action"] == "heating" for v in valves)
         out.append(
             {
@@ -153,6 +165,7 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
     return {
         "heating": {
             "circuits": out,
+            "circuits_heating": sum(c["heating"] for c in out),
             "valves": len(every),
             "valves_heating": sum(v["hvac_action"] == "heating" for v in every),
             "windows": sum(len(c["windows"]) for c in out),
@@ -165,8 +178,13 @@ def summarize(circuits: list, states: dict[str, dict], devices: dict[str, str]) 
 
 
 async def heating_summary(circuits: list) -> dict:
-    """summarize() over HA's live states; policy.OpError when HA does not answer."""
+    """summarize() over HA's live states; policy.OpError when HA does not answer.
+    Without the entity registry only the batteries are missing."""
     async with aiohttp.ClientSession() as http:
         states = await _states(http)
-        devices = await _entity_devices(http)
+        try:
+            devices = await _entity_devices(http)
+        except policy.OpError as e:
+            logger.warning("Registr entit HA nenačten, baterie chybí: %s %s", e.code, e.message)
+            devices = {}
     return summarize(circuits, states, devices)

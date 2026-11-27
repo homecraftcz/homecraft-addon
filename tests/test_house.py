@@ -5,7 +5,7 @@ import asyncio
 
 from aiohttp import web
 
-from connector import features, house, network_discovery, settings
+from connector import features, house, network_discovery, policy, settings
 
 CIRCUITS = [
     {
@@ -96,9 +96,46 @@ def test_threshold_helper_and_outdoor_source():
 
 
 def test_missing_and_malformed_data_does_not_break():
-    got = house.summarize([{"valves": "x"}, "junk", {"windows": [{"sensors": [1]}]}], {}, {})
-    assert got["heating"]["valves"] == 0
-    assert got["heating"]["outdoor"] is None
+    circuits = [
+        {"instance": "c1", "valves": "x"},
+        "junk",
+        {"instance": "c2", "windows": [{"sensors": [1]}]},
+        {"instance": {"x": 1}, "valves": [{"entity_id": "climate.bathroom"}]},  # skipped
+        {"instance": "c3", "heading": {"x": 1}, "valves": [{"entity_id": "climate.a", "name": 5}]},
+    ]
+    got = house.summarize(circuits, {}, {})
+    h = got["heating"]
+    assert [c["name"] for c in h["circuits"]] == ["c1", "c2", "c3"]
+    assert h["circuits"][2]["valves"][0]["name"] == "climate.a"
+    assert h["circuits"][1]["windows"][0]["name"] == ""
+    assert (h["valves"], h["circuits_heating"]) == (1, 0)
+    assert h["outdoor"] is None
+    assert got["low_batteries"] == []
+
+
+def test_several_battery_sensors_on_one_device_keep_the_lowest():
+    states = _by_id([*STATES, _state("sensor.bathroom_battery_2", "60", device_class="battery")])
+    devices = {**_devices(), "sensor.bathroom_battery_2": "d1"}
+    got = house.summarize(CIRCUITS, states, devices)
+    assert got["low_batteries"][0]["battery"] == 12.0
+    states = _by_id([*STATES, _state("sensor.kitchen_battery_2", "5", device_class="battery")])
+    devices = {**_devices(), "sensor.kitchen_battery_2": "d2"}
+    got = house.summarize(CIRCUITS, states, devices)
+    assert got["low_batteries"][0]["name"] == "Kuchyň TRV"
+
+
+def test_registry_failure_keeps_the_summary(monkeypatch):
+    async def states(http):
+        return _by_id(STATES)
+
+    async def collect(http, commands, **kw):
+        raise policy.OpError("ha_unreachable", "x")
+
+    monkeypatch.setattr(house, "_registry", {"at": None, "devices": {}})
+    monkeypatch.setattr(house, "_states", states)
+    monkeypatch.setattr(network_discovery, "collect", collect)
+    got = asyncio.run(house.heating_summary(CIRCUITS))
+    assert got["heating"]["valves"] == 2
     assert got["low_batteries"] == []
 
 

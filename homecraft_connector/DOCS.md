@@ -67,9 +67,11 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
 
 - **Domů**: při odpojení banner **Homecraft teď nemůže do domu** (bez
   přístupového tokenu místo něj nápověda k jeho zadání, během žádosti
-  o spárování k porovnání ověřovacího kódu); banner **Slabá baterie v hlavici
-  … (N %)** s tlačítkem **Ukázat** (záložka Topení). Tři dlaždice:
-  - **Topení**: počet okruhů, hlavic a oken, kolik hlavic právě topí, které
+  o spárování k porovnání ověřovacího kódu); bez tokenu správce HA banner
+  s odkazem **Doplnit** (otevře **Pro technika**); banner **Slabá baterie
+  v hlavici … (N %)** s tlačítkem **Ukázat** (záložka Topení). Tři dlaždice:
+  - **Topení**: počet okruhů, hlavic a oken, Topí / Netopí podle okruhů
+    (`binary_sensor.heating_state_<okruh>`) a kolik hlavic právě topí, které
     okruhy topí a které jsou v útlumu, venkovní teplota (ze zdroje topení,
     `input_text.heating_outdoor_temperature_source`, jinak
     `weather.forecast_domov`; bez hodnoty se vynechá), slabé baterie
@@ -80,7 +82,8 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
     stejném zařízení jako hlavice nebo okenní čidlo, pod hranicí
     `input_number.heating_low_battery_threshold` (bez ní 30 %);
   - **Vzdálený přístup**: zapnuto (je nainstalovaná feature Tailscale, s jménem
-    tailnetu) nebo vypnuto (případně kdy majitel požádal o zapnutí);
+    tailnetu), chyba doplňku, nebo vypnuto (případně kdy majitel požádal
+    o zapnutí);
   - **Zařízení v síti**: počet, druhy a nová zařízení ze skenu.
 
   Dále seznam **Co máte od Homecraftu** (verze, stav; u topení a vzdáleného
