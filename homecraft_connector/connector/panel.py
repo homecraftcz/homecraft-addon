@@ -1,7 +1,8 @@
 """The add-on panel behind HA ingress (#556): the house name (HA's location_name),
 state, verification and pairing code, Access token, pause, consent to error reports (#31)
 with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices (#631)
-with their LAN scan (#633) and the features Homecraft installed (homecraftcz/homecraft#636).
+with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636)
+and the live heating on Domů (#47, read only).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -29,6 +30,7 @@ from . import (
     features,
     fingerprint,
     ha_token,
+    house,
     http_proxy,
     network_devices,
     network_discovery,
@@ -343,6 +345,26 @@ async def _features(request: web.Request) -> web.Response:
     return web.json_response(features.load())
 
 
+async def _house(request: web.Request) -> web.Response:
+    """Live heating for Domů (#47). Without circuits in the features report
+    (an older Homecraft, no heating) HA is not asked: `heating` is None."""
+    heating = [f for f in features.load()["features"] if isinstance(f.get("circuits"), list)]
+    circuits = [c for f in heating for c in f["circuits"]]
+    if not heating:
+        return web.json_response({"heating": None, "low_batteries": []})
+    try:
+        return web.json_response(await house.heating_summary(circuits))
+    except policy.OpError as e:
+        logger.warning("Stav domu z HA nenačten: %s %s", e.code, e.message)
+        return web.json_response(
+            {
+                "heating": None,
+                "low_batteries": [],
+                "error": f"Home Assistant neodpověděl ({e.code})",
+            }
+        )
+
+
 async def _network_devices(request: web.Request) -> web.Response:
     return web.json_response(network_devices.load())
 
@@ -427,6 +449,7 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/updates", _updates)
     app.router.add_post("/api/updates/run", _run_update)
     app.router.add_get("/api/features", _features)
+    app.router.add_get("/api/house", _house)
     app.router.add_get("/api/network-devices", _network_devices)
     app.router.add_put("/api/network-devices", _save_network_devices)
     app.router.add_get("/api/network-devices/ha", _ha_candidates)

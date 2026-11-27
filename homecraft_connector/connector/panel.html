@@ -72,7 +72,7 @@ h2 { margin: 0; }
 .dot.run { background: var(--hfb-run-dot); color: #fff; }
 .dot.okd { background: var(--hfb-ok-dot); color: #fff; }
 .grid { display: grid; gap: 16px; }
-.tiles { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
 .home { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
 .ft { text-decoration: none; color: inherit; gap: 10px; }
@@ -80,6 +80,8 @@ a.ft:hover { border-color: var(--hfb-off); }
 .ft .big { font-size: 22px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ft .meta { font-size: 12px; color: var(--hfb-text-2); overflow-wrap: anywhere; }
 .ft .foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.ft .foot:not(:has(.pill:not([hidden]))) { display: none; }
+.ft .unit { font-size: 13px; font-weight: 500; color: var(--hfb-text-2); }
 .tile { background: var(--hfb-fill); border-radius: var(--hfb-tile-radius); padding: 10px 12px; min-width: 0; }
 .tile .l { font-size: 11px; color: var(--hfb-text-2); }
 .tile .v { font-size: 14px; font-weight: 700; margin-top: 2px; overflow-wrap: anywhere; }
@@ -126,6 +128,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .alert { display: flex; align-items: flex-start; gap: 10px; border-radius: 12px; padding: 10px 14px; font-size: 13px; }
 .alert svg { flex: none; margin-top: 1px; }
 .alert.warn { background: var(--warn-tint); color: var(--warn); }
+.alert.err { background: var(--bad-tint); color: var(--bad); }
+.alert .grow { flex: 1; min-width: 0; }
+.alert .sb { margin: -4px -6px -4px 0; }
 .verification { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 3px; overflow-wrap: anywhere; }
 .center { align-items: center; text-align: center; }
 .chip { min-height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12px; background: var(--hfb-card); color: var(--hfb-text-2);
@@ -213,18 +218,21 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
   <div data-tab="home" class="stack">
     <div class="alert warn" id="offlineBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4z"/><path d="M12 10v4M12 17.5v.01"/></svg>
       <div><b id="bannerTitle"></b> <span id="bannerText"></span></div></div>
+    <div class="alert err" id="batteryBanner" role="status" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M6 10v4"/></svg>
+      <div class="grow"><b id="batteryTitle"></b> <span id="batteryText"></span></div>
+      <a class="sb" href="#heating">Ukázat</a></div>
 
     <div class="grid tiles">
-      <a class="card ft" href="#security">
-        <div class="hd"><span class="dot" id="tConnDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
-          <div class="grow"><div class="t">Spojení</div><div class="s">s Homecraftem</div></div></div>
-        <div><div class="big" id="tConn">–</div><div class="meta" id="tConnSub"></div></div>
+      <a class="card ft" href="#heating">
+        <div class="hd"><span class="dot heat"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg></span>
+          <div class="grow"><div class="t">Topení</div><div class="s" id="tHeatCount"></div></div></div>
+        <div><div class="big" id="tHeat">–</div><div class="meta" id="tHeatSub"></div></div>
+        <div class="foot"><span class="pill bad" id="tHeatBat" hidden></span><span class="pill warn" id="tHeatWin" hidden></span></div>
       </a>
-      <a class="card ft" href="#home" id="tFeatLink">
-        <div class="hd"><span class="dot run"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg></span>
-          <div class="grow"><div class="t">Co máte od Homecraftu</div><div class="s">features</div></div></div>
-        <div><div class="big" id="tFeat">–</div><div class="meta" id="tFeatSub"></div></div>
-        <div class="foot"><span class="pill" id="tFeatUpd">0 aktualizací</span></div>
+      <a class="card ft" href="#remote">
+        <div class="hd"><span class="dot" id="tRemoteDot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></span>
+          <div class="grow"><div class="t">Vzdálený přístup</div><div class="s">k domu odkudkoli</div></div></div>
+        <div><div class="big" id="tRemote">–</div><div class="meta" id="tRemoteSub"></div></div>
       </a>
       <a class="card ft" href="#devices">
         <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
@@ -232,27 +240,28 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
         <div><div class="big" id="tNet">–</div><div class="meta" id="tNetSub"></div></div>
         <div class="foot"><span class="pill" id="tNetNew">0 nových ze skenu</span></div>
       </a>
-      <a class="card ft" href="#security">
-        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg></span>
-          <div class="grow"><div class="t">Co Homecraft dělal</div><div class="s">za posledních 24 h</div></div></div>
-        <div><div class="big" id="tAudit">–</div><div class="meta" id="tAuditSub"></div></div>
-      </a>
-      <a class="card ft" href="#security" id="tSecLink">
-        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"/></svg></span>
-          <div class="grow"><div class="t">Zabezpečení</div><div class="s">tokeny doplňku</div></div></div>
-        <div><div class="big" id="tSec" style="font-size:18px">–</div><div class="meta" id="tSecSub"></div></div>
-      </a>
     </div>
 
     <div class="grid home">
       <section class="card" id="featCard" aria-labelledby="featH">
         <div class="hd">
           <div class="grow"><h2 class="t" id="featH">Co máte od Homecraftu</h2>
-            <div class="s">Nastavuje technik v Homecraftu, tady je jen přehled.</div></div>
+            <div class="s">Nastavuje technik v Homecraftu, tady jen přehled. Co můžete měnit sami, má odkaz.</div></div>
           <a class="sb sf" id="projectLink" target="_blank" rel="noopener noreferrer" hidden>Otevřít projekt v Homecraftu</a>
         </div>
         <div class="rows" id="featRows"></div>
         <p id="featEmpty" class="help">Souhrn pošle Homecraft po připojení a po každém Apply.</p>
+      </section>
+
+      <div class="stack">
+      <section class="card" aria-labelledby="techH">
+        <div class="hd"><span class="dot"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+          <div class="grow"><h2 class="t" id="techH">Váš technik</h2><div class="s" id="techName">Homecraft</div></div></div>
+        <div class="grid g2">
+          <div class="tile"><div class="l">Naposledy změnil</div><div class="v" id="techLast">–</div><div class="c" id="techLastSub"></div></div>
+          <div class="tile"><div class="l">Za 24 h</div><div class="v" id="techOps">–</div><div class="c" id="techRefused"></div></div>
+        </div>
+        <a class="sb sf" href="#security" style="align-self:flex-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Co Homecraft dělal</a>
       </section>
 
       <section class="card" aria-labelledby="pauseH">
@@ -263,6 +272,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
           zavřou, spojení s Homecraftem zůstává. Nastavení přežije restart doplňku.</p>
         <div id="pauseMsg" class="msg"></div>
       </section>
+      </div>
     </div>
 
     <section class="card" id="updates" aria-labelledby="updatesH" hidden>
@@ -602,7 +612,7 @@ async function refreshStatus() {
   $("conn").textContent = connText;
   $("connSub").textContent = s.connected ? "" : s.last_error || "Připojuji…";
   $("connSince").textContent = s.connected && s.last_connected ? "Online od " + fmtTime(s.last_connected) : "";
-  $("connDot").className = $("tConnDot").className = "dot" + (s.connected && !s.paused ? " okd" : "");
+  $("connDot").className = "dot" + (s.connected && !s.paused ? " okd" : "");
   $("headConnLong").textContent = s.paused ? "Homecraft pozastaven" : s.connected ? "Připojeno k Homecraftu" : "Homecraft nedostupný";
   $("headConnShort").textContent = s.paused ? "Pozastaveno" : s.connected ? "Připojeno" : "Nedostupný";
   $("headConn").className = "pill dotted " + connCls;
@@ -637,21 +647,14 @@ async function refreshStatus() {
   $("haTokenForm").hidden = s.ha_token_set;
   $("tokenUpdated").textContent = "(aktualizován " + fmtTime(s.token_updated_at) + " Homecraftem)";
 
-  $("tConn").textContent = connText;
-  $("tConnSub").textContent = s.pending_approval ? "Čeká na schválení v Homecraftu"
-    : s.connected ? hostOf(s.server_url) : s.last_error || "Připojuji…";
-  $("tSec").textContent = !s.token_set ? "Chybí přístupový token"
-    : !s.ha_token_set ? "Chybí token správce HA" : "Vše nastaveno";
-  $("tSecSub").textContent = !s.token_set ? "Bez něj se doplněk k Homecraftu nepřipojí"
-    : !s.ha_token_set ? "Ingress do doplňků (Node-RED, Grafana…) nepůjde"
-    : "Přístupový token Homecraftu · Token správce HA";
   const a = s.audit_24h;
-  $("tAudit").textContent = a.count + (a.capped ? "+" : "") + " operací";
-  $("tAuditSub").textContent = a.refused + " odmítnutých";
+  $("techOps").textContent = a.count + (a.capped ? "+" : "") + plural(a.count, " operace", " operace", " operací");
+  $("techRefused").textContent = a.refused + plural(a.refused, " odmítnutá", " odmítnuté", " odmítnutých");
 }
 
-function hostOf(url) {
-  try { return new URL(url).host; } catch { return url; }
+// Czech plural: 1, 2–4, the rest.
+function plural(n, one, few, many) {
+  return n === 1 ? one : n >= 2 && n <= 4 ? few : many;
 }
 
 // The tabs of v1 (bookmarks, links in Homecraft) land on their new place.
@@ -816,6 +819,7 @@ const FEAT_STATUS = { running: ["běží", "ok"], update: ["aktualizace čeká n
   addon_error: ["chyba doplňku", "bad"] };
 let feats = { project_url: "", features: [], received_at: null };
 let lastFeats = null;
+let house = { heating: null, low_batteries: [] };
 
 function line(text, cls) {
   const div = document.createElement("div");
@@ -823,6 +827,9 @@ function line(text, cls) {
   div.textContent = text;
   return div;
 }
+
+// Features the owner can set in this panel (homecraft#945 `id`) -> tab.
+const FEAT_TABS = { heating: "#heating", tailscale: "#remote" };
 
 function featRow(f) {
   const row = document.createElement("div");
@@ -832,29 +839,84 @@ function featRow(f) {
   const version = f.available && f.available !== f.version ? f.version + " → " + f.available : f.version;
   body.append(line(f.name, "n"),
     line([f.instances.join(", "), version && "verze " + version].filter(Boolean).join(" · "), "m"));
-  const net = f.devices.map(deviceName).join(", ");
-  body.append(line("Nasazeno " + fmtTime(f.applied_at) + (net ? " · Síť: " + net : ""), "m"));
-  if (f.files.length) body.append(line(f.files.join(", "), "m mono"));
   if (f.error) body.append(line(f.error, "m err"));
-  const [label, cls] = FEAT_STATUS[f.status] || [f.status, ""];
-  row.append(body, line(label, "pill " + cls));
+  row.append(body);
+  if (f.status !== "running") {
+    const [label, cls] = FEAT_STATUS[f.status] || [f.status, ""];
+    row.append(line(label, "pill " + cls));
+  }
+  if (Object.hasOwn(FEAT_TABS, f.id)) {
+    const a = document.createElement("a");
+    a.className = "sb sf";
+    a.href = FEAT_TABS[f.id];
+    a.textContent = "Nastavit";
+    row.append(a);
+  } else if (f.status === "running") {
+    row.append(line("jen přehled", "pill"));
+  }
   return row;
 }
 
-function deviceName(address) {
-  const d = devices.find((x) => x.address === address || x.hostname === address);
-  return d ? d.name : address;
+const num = (n) => n.toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+
+// The Topení tile, the nav badge and the battery banner (/api/house, #47).
+function renderHouse() {
+  const h = house.heating;
+  const low = house.low_batteries || [];
+  $("heatingCount").hidden = !low.length;
+  $("heatingCount").textContent = low.length;
+  $("heatingCount").setAttribute("aria-label", low.length + plural(low.length, " slabá baterie", " slabé baterie", " slabých baterií"));
+  $("tHeatBat").hidden = !low.length;
+  $("tHeatBat").textContent = low.length + plural(low.length, " slabá baterie", " slabé baterie", " slabých baterií");
+  $("batteryBanner").hidden = !low.length;
+  if (low.length) {
+    const b = low[0];
+    $("batteryTitle").textContent = "Slabá baterie " + (b.kind === "window" ? "v okenním čidle " : "v hlavici ")
+      + b.name + " (" + num(b.battery) + " %)" + (low.length > 1 ? " a " + (low.length - 1) + " další." : ".");
+    $("batteryText").textContent = "Vyměňte ji co nejdřív.";
+  }
+  const winOpen = h ? h.windows_open : 0;
+  $("tHeatWin").hidden = !winOpen;
+  $("tHeatWin").textContent = winOpen + plural(winOpen, " otevřené okno", " otevřená okna", " otevřených oken");
+  if (!h) {
+    $("tHeat").textContent = "–";
+    $("tHeatCount").textContent = "";
+    $("tHeatSub").textContent = house.error || "Topení nastavuje technik";
+    return;
+  }
+  const n = h.circuits.length;
+  $("tHeatCount").textContent = [n + plural(n, " okruh", " okruhy", " okruhů"),
+    h.valves + plural(h.valves, " hlavice", " hlavice", " hlavic"),
+    h.windows + plural(h.windows, " okno", " okna", " oken")].join(" · ");
+  const unit = document.createElement("span");
+  unit.className = "unit";
+  unit.textContent = h.valves_heating + " z " + h.valves;
+  $("tHeat").replaceChildren(h.valves_heating ? "Topí " : "Netopí ", unit);
+  const circuits = h.circuits.map((c) => c.name + (c.heating ? " topí" : " v útlumu")).join(", ");
+  $("tHeatSub").textContent = [circuits, h.outdoor != null && "venku " + num(h.outdoor) + " °C"]
+    .filter(Boolean).join(" · ");
+}
+
+// The Vzdálený přístup tile and Váš technik, from the features report (homecraft#945, #947).
+function renderRemoteAndTech() {
+  const ts = feats.features.find((f) => f.id === "tailscale");
+  $("tRemote").textContent = ts ? "Zapnuto" : "Vypnuto";
+  $("tRemoteDot").className = "dot" + (ts ? " okd" : "");
+  const tailnet = ts && ts.settings && ts.settings.tailnet;
+  $("tRemoteSub").textContent = ts ? (tailnet || "Adresu doplní technik")
+    : feats.remote_access_requested_at ? "Požádáno " + fmtTime(feats.remote_access_requested_at)
+    : "Zapnete v záložce Vzdálený přístup";
+  $("tRemoteSub").className = "meta" + (tailnet ? " mono" : "");
+  $("techName").textContent = feats.technician ? feats.technician + " · Homecraft" : "Homecraft";
+  const lc = feats.last_change;
+  $("techLast").textContent = lc && lc.at ? fmtTime(lc.at) : "–";
+  $("techLastSub").textContent = lc ? [lc.actor !== feats.technician && lc.actor, lc.feature, lc.instance]
+    .filter(Boolean).join(" · ") : "Ukáže se po prvním Apply";
 }
 
 function renderFeatures() {
   const list = feats.features;
-  const upd = list.filter((f) => f.status === "update").length;
-  $("tFeat").textContent = list.length;
-  const last = Math.max(0, ...list.map((f) => f.applied_at || 0));
-  $("tFeatSub").textContent = last ? "Poslední Apply " + fmtTime(last)
-    : feats.received_at ? "Homecraft zatím nic nenainstaloval" : "Souhrn pošle Homecraft po připojení";
-  $("tFeatUpd").textContent = upd + (upd >= 1 && upd <= 4 ? " aktualizace" : " aktualizací") + " čeká";
-  $("tFeatUpd").className = "pill " + (upd ? "warn" : "");
+  renderRemoteAndTech();
   $("featRows").replaceChildren(...list.map(featRow));
   $("projectLink").hidden = !feats.project_url;
   if (feats.project_url) $("projectLink").href = feats.project_url;
@@ -871,6 +933,16 @@ async function refreshFeatures() {
   feats = f;
   renderFeatures();
   renderDevices();  // the Používá column
+}
+
+// Every 30 s, not with refresh(): it reads all of HA's states.
+async function refreshHouse() {
+  try {
+    house = await call("GET", "api/house");
+  } catch (e) {
+    house = { heating: null, low_batteries: [], error: "Stav domu se nepodařilo načíst: " + e.message };
+  }
+  renderHouse();
 }
 
 async function refresh() {
@@ -901,16 +973,6 @@ $("paused").onchange = $("paused2").onchange = async (ev) => {
     both(e.message, true);
   }
   refresh();
-};
-
-// Tiles that point inside a tab: switch tab, then open / scroll to the section.
-$("tSecLink").onclick = () => {
-  $("tech").open = true;
-  setTimeout(() => $("tech").scrollIntoView({ block: "start" }), 0);
-};
-$("tFeatLink").onclick = (ev) => {
-  ev.preventDefault();
-  $("featCard").scrollIntoView({ block: "start" });
 };
 
 $("errorReports").onchange = async (ev) => {
@@ -1300,4 +1362,6 @@ $("netScanAdd").onclick = async () => {
 loadDevices().catch((e) => show("netMsg", "Seznam se nepodařilo načíst: " + e.message, true));
 refresh();
 setInterval(refresh, 5000);
+refreshHouse();
+setInterval(refreshHouse, 30000);
 </script>
