@@ -437,6 +437,7 @@ label.f input { font-size: 14px; }
           <div class="tile"><div class="l">Relé kotle</div><div class="v" id="bRelay">–</div></div>
           <div class="tile"><div class="l">Doběh čerpadla</div><div class="v" id="bOverrun">–</div></div>
         </div>
+        <div class="grid g2" id="bSource" hidden></div>
         <p class="help">Zdroj tepla, výkon a blokaci taktování zadává technik v Homecraftu.</p>
       </div>
       <div id="helperMsg" class="msg" role="status"></div>
@@ -1169,6 +1170,7 @@ async function refreshFeatures() {
   feats = f;
   renderFeatures();
   renderDevices();  // the Používá column
+  renderBoilerSource();
 }
 
 // --- Vzdálený přístup (#50): /api/remote when the tab opens and on Zkontrolovat
@@ -1328,6 +1330,7 @@ const HEAT_EMPTY = $("heatEmptyText").textContent;
 const PHASE = { fast: "rychlý start", run: "doběh", overrun: "doběh čerpadla", closed: "zavřeno" };
 const MODE = { on: "Zapnuto", off: "Vypnuto", by_weather: "Počasí" };
 const RELAY = { on: "Zapnuto", off: "Vypnuto", unavailable: "Nedostupné" };
+const SOURCE = { gas: "Plynový kotel", electric: "Elektrokotel", heat_pump: "Tepelné čerpadlo" };
 const temp = (n) => n == null ? "–" : n.toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " °C";
 
 function renderCircuits() {
@@ -1698,6 +1701,35 @@ function renderCircuit() {
   const boiler = d ? d.boiler : {};
   $("bRelay").textContent = boiler.relay ? RELAY[boiler.relay] || boiler.relay : "–";
   $("bOverrun").textContent = boiler.overrun != null ? num(boiler.overrun) + " min" : "–";
+  renderBoilerSource();
+}
+
+// The heat source the technician set in Homecraft, from the features report
+// (homecraft#952): a tile only for each value that is set.
+function renderBoilerSource() {
+  const heating = feats.features.find((f) => f.id === "heating");
+  const list = heating && Array.isArray(heating.circuits) ? heating.circuits : [];
+  const c = list.find((x) => x && x.instance === circ);
+  const b = c && c.boiler && typeof c.boiler === "object" ? c.boiler : {};
+  const text = (k) => typeof b[k] === "string" ? b[k].trim() : "";
+  const tiles = [
+    ["Zdroj tepla", SOURCE[text("source_type")] || text("source_type")],
+    ["Výkon", text("power_max_kw") && text("power_max_kw").replace(".", ",") + " kW"],
+    ["Blokace taktování", text("anti_cycling_min") && text("anti_cycling_min").replace(".", ",") + " min"],
+  ].filter(([, v]) => v).map(([label, value]) => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    const l = document.createElement("div");
+    l.className = "l";
+    l.textContent = label;
+    const v = document.createElement("div");
+    v.className = "v";
+    v.textContent = value;
+    tile.append(l, v);
+    return tile;
+  });
+  $("bSource").replaceChildren(...tiles);
+  $("bSource").hidden = !tiles.length;
 }
 
 for (const b of $("subTabs").children) b.onclick = () => { subTab = b.dataset.sub; renderCircuit(); };

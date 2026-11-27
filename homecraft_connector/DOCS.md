@@ -103,7 +103,9 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
     (0–120 min po 5, 0 = nikdy);
   - **Kdy topit**: věta, zda kotel v režimu Počasí smí topit, přepínač
     **Venkovní teplotou** / **Časem**, práh (5–25 °C po 0,5) nebo čas od–do;
-  - **Kotel**: jen čtení (relé kotle `switch.boiler_<okruh>`, doběh čerpadla).
+  - **Kotel**: jen čtení (relé kotle `switch.boiler_<okruh>`, doběh čerpadla;
+    z Homecraftu zdroj tepla, výkon a blokace taktování, jen ty, které technik
+    vyplnil, homecraftcz/homecraft#952).
 
   **Co mění majitel sám**: připomenutí okna a pravidlo Počasí. Jsou to
   helpery okruhu v HA (`input_number.heating_window_reminder_<okruh>`,
