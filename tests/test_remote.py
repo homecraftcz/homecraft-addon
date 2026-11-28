@@ -286,7 +286,7 @@ def test_request_sends_and_keeps_requested_at(run_panel, agent, monkeypatch, sup
     ("err", "code"),
     [
         (AskError("unknown"), 502),
-        (AskError("busy", "Server busy"), 409),
+        (AskError("busy", panel.HUB_BUSY), 409),
         (AskError("not_paired"), 502),
         (AskError("internal", "boom"), 502),
     ],
@@ -298,7 +298,7 @@ def test_request_errors(run_panel, agent, monkeypatch, err, code):
     monkeypatch.setattr(agent, "ask", ask)
     status_, body, _ = post_request(run_panel)
     assert status_ == code and body["ok"] is False and body["code"] == err.code
-    assert "Server busy" not in body["error"] and "boom" not in body["error"]  # Czech texts only
+    assert panel.HUB_BUSY not in body["error"] and "boom" not in body["error"]  # Czech texts only
 
 
 class FakeWriter:

@@ -4,8 +4,9 @@ with HA's system_log (homecraftcz/homecraft#906), the audit, the network devices
 with their LAN scan (#633), the features Homecraft installed (homecraftcz/homecraft#636),
 the live heating on Domů (#47, read only) and Topení (#48: read, plus the
 five helpers of a circuit the owner sets; #49: names and window valves saved
-through Homecraft's heating.save) and Vzdálený přístup (#50: Tailscale's state,
-a QR code of the house address, the owner's remote_access.request).
+through Homecraft's heating.save; #58: Doporučení, Homecraft's heating.advise
+and heating.advice_apply) and Vzdálený přístup (#50: Tailscale's state, a QR
+code of the house address, the owner's remote_access.request).
 
 Only the Supervisor's ingress proxy may talk to it (HA add-on docs: allow
 172.30.32.2, deny everyone else); CONNECTOR_DEV=1 drops that check for the
@@ -22,6 +23,7 @@ import asyncio
 import logging
 import secrets
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import aiohttp
@@ -498,55 +500,178 @@ def _heating_payload(body: object) -> dict:
 
 # heating.save errors (homecraftcz/homecraft#946): these carry a Czech message for
 # the owner, shown as is; the rest are ours or the hub's (English) and get a text here.
-OWNER_MESSAGES = ("invalid", "blocked", "failed")
+OWNER_MESSAGES = ("invalid", "blocked", "failed", "stale")
+# `busy` from a handler is Czech (shown as is); the hub's own (too many requests) is not.
+HUB_BUSY = "Too many requests in flight"
+BUSY = "Homecraft je teď zaneprázdněný, zkuste to za chvíli."
 SAVE_ERRORS = {
     "offline": "Homecraft není připojený, změny teď nejde uložit.",
     "paused": "Homecraft je pozastavený, změny teď nejde uložit.",
     "unknown": ("Spojení se přerušilo, nevíme, jestli se změna uložila – zkontrolujte za chvíli."),
     "unknown_op": "Tahle verze Homecraftu ukládání z panelu neumí.",
-    "busy": "Ukládání topení už probíhá, zkuste to za chvíli.",
+    "busy": BUSY,
     "not_paired": "Doplněk není spárovaný s Homecraftem.",
     "too_large": "Změn je najednou moc, uložte je po částech.",
     "blocked": "Technik musí nejdřív vyřešit změny v Home Assistantu.",
 }
 SAVE_TIMEOUT = 300.0  # Plan + Apply on a slow HA can take minutes
-ASK_STATUS = {"offline": 409, "paused": 409, "busy": 409, "blocked": 409, "invalid": 400}
+ASK_STATUS = {
+    "offline": 409,
+    "paused": 409,
+    "busy": 409,
+    "blocked": 409,
+    "stale": 409,
+    "invalid": 400,
+}
 
 
 def _ask_error(e: AskError, op: str, target: str, texts: dict, fallback: str) -> web.Response:
     """A failed client.ask from the panel: audited, logged, answered in Czech
-    (the handler's own message for OWNER_MESSAGES codes, else `texts`)."""
+    (the handler's own message for OWNER_MESSAGES codes and a handler's busy,
+    else `texts`)."""
     audit.record(op, target, False, e.code)
     logger.warning("%s %s z panelu selhalo: %s", op, target, e.code)
-    message = (e.code in OWNER_MESSAGES and e.message) or texts.get(e.code)
+    owner = e.code in OWNER_MESSAGES or (e.code == "busy" and e.message != HUB_BUSY)
+    message = (owner and e.message) or texts.get(e.code)
     return web.json_response(
         {"ok": False, "code": e.code, "error": message or f"{fallback} ({e.code})."},
         status=ASK_STATUS.get(e.code, 502),
     )
 
 
-async def _heating_save(request: web.Request) -> web.Response:
-    """Topení › Uložit (#49): the owner's names and window valves go to Homecraft
-    as heating.save, which saves the circuit and applies heating (or refuses).
-    One of the two Homecraft requests the panel makes (with remote_access.request);
-    nothing is changed here."""
+async def _ask_homecraft(
+    request: web.Request,
+    op: str,
+    check: Callable[[web.Request, object], dict],
+    timeout: float,
+    texts: dict,
+    fallback: str,
+) -> tuple[str, dict] | web.Response:
+    """A panel request Homecraft carries out: the JSON body checked by `check`
+    (ValueError: 400), asked as `op`, audited under the circuit. (instance,
+    result) or the error response."""
     try:
         body = await request.json()
     except ValueError:
         raise web.HTTPBadRequest(text="expected JSON") from None
     try:
-        payload = _heating_payload(body)
+        payload = check(request, body)
     except ValueError as e:
-        return web.json_response({"ok": False, "error": f"Neplatná změna: {e}"}, status=400)
+        return web.json_response({"ok": False, "error": f"Neplatný požadavek: {e}"}, status=400)
     instance = payload["instance"]
     try:
-        result = await request.app[CLIENT].ask("heating.save", payload, SAVE_TIMEOUT)
+        result = await request.app[CLIENT].ask(op, payload, timeout)
     except AskError as e:
-        return _ask_error(e, "heating.save", instance, SAVE_ERRORS, "Uložení se nepovedlo")
-    audit.record("heating.save", instance, True)
-    status = result.get("status") if isinstance(result, dict) else None
+        return _ask_error(e, op, instance, texts, fallback)
+    audit.record(op, instance, True)
+    return instance, result if isinstance(result, dict) else {}
+
+
+async def _heating_save(request: web.Request) -> web.Response:
+    """Topení › Uložit (#49): the owner's names and window valves go to Homecraft
+    as heating.save, which saves the circuit and applies heating (or refuses).
+    One of the Homecraft requests the panel makes (with remote_access.request and
+    the heating advice); nothing is changed here."""
+    done = await _ask_homecraft(
+        request,
+        "heating.save",
+        lambda _, body: _heating_payload(body),
+        SAVE_TIMEOUT,
+        SAVE_ERRORS,
+        "Uložení se nepovedlo",
+    )
+    if isinstance(done, web.Response):
+        return done
+    instance, result = done
+    status = result.get("status")
     logger.info("Topení %s uloženo z panelu (%s)", instance, status)
     return web.json_response({"ok": True, "status": status})
+
+
+# Topení › Doporučení (#58): heating.advise / heating.advice_apply
+# (homecraftcz/homecraft#337). Homecraft analyses the circuit (its default
+# 14 days) and keeps the proposed changes (10 min); the panel shows them and
+# sends back a change_id.
+ADVISE_TIMEOUT = 150.0  # HA history through the Connector + AI; Homecraft stops at ~100 s
+CHANGE_ID_MAX = 32
+HA_USER_MAX = 64
+ADVISE_ERRORS = {
+    "offline": "Homecraft není připojený, analýzu teď nejde spustit.",
+    "paused": "Homecraft je pozastavený, analýzu teď nejde spustit.",
+    "unknown": "Homecraft neodpověděl včas, zkuste analýzu za chvíli znovu.",
+    "unknown_op": "Tahle verze Homecraftu doporučení neumí.",
+    "not_paired": "Doplněk není spárovaný s Homecraftem.",
+    "busy": BUSY,
+}
+APPLY_ERRORS = {
+    **ADVISE_ERRORS,
+    "offline": "Homecraft není připojený, návrh teď nejde použít.",
+    "paused": "Homecraft je pozastavený, návrh teď nejde použít.",
+    "unknown": "Spojení se přerušilo, nevíme, jestli se návrh použil – spusťte analýzu znovu.",
+    "stale": "Návrh vypršel, spusťte analýzu znovu.",
+}
+
+
+def _ha_user(request: web.Request) -> str | None:
+    """The HA user in the panel, from the ingress headers (only the Supervisor's
+    proxy reaches us, _guard), printable and at most HA_USER_MAX characters;
+    for Homecraft's history, never for permissions."""
+    h = request.headers
+    name = h.get("X-Remote-User-Display-Name") or h.get("X-Remote-User-Name") or ""
+    return "".join(c for c in name if c.isprintable()).strip()[:HA_USER_MAX] or None
+
+
+def _advise_payload(request: web.Request, body: object) -> dict:
+    """`{"instance"}` of a reported circuit. ValueError."""
+    if not isinstance(body, dict) or _circuit(body.get("instance")) is None:
+        raise ValueError("instance: not a reported circuit")
+    return {"instance": body["instance"]}
+
+
+def _apply_payload(request: web.Request, body: object) -> dict:
+    """`{"instance", "change_id", "ha_user"?}`: a reported circuit, a
+    change_id of at most CHANGE_ID_MAX characters. ValueError."""
+    payload = _advise_payload(request, body)
+    change_id = body.get("change_id")
+    if not isinstance(change_id, str) or not 0 < len(change_id) <= CHANGE_ID_MAX:
+        raise ValueError(f"change_id: text of at most {CHANGE_ID_MAX} characters")
+    payload["change_id"] = change_id
+    if ha_user := _ha_user(request):
+        payload["ha_user"] = ha_user
+    return payload
+
+
+async def _heating_advise(request: web.Request) -> web.Response:
+    """Doporučení › Analyzovat: Homecraft reads the circuit's history, schedules
+    and boiler profile and answers with the summary and findings, passed on as is."""
+    done = await _ask_homecraft(
+        request,
+        "heating.advise",
+        _advise_payload,
+        ADVISE_TIMEOUT,
+        ADVISE_ERRORS,
+        "Analýza se nepovedla",
+    )
+    if isinstance(done, web.Response):
+        return done
+    return web.json_response({**done[1], "ok": True})
+
+
+async def _heating_advice_apply(request: web.Request) -> web.Response:
+    """Doporučení › Použít: Homecraft writes the change it proposed (change_id)
+    to the circuit's schedules; nothing is written to HA here."""
+    done = await _ask_homecraft(
+        request,
+        "heating.advice_apply",
+        _apply_payload,
+        SAVE_TIMEOUT,
+        APPLY_ERRORS,
+        "Použití se nepovedlo",
+    )
+    if isinstance(done, web.Response):
+        return done
+    logger.info("Doporučení pro topení %s použito z panelu", done[0])
+    return web.json_response({"ok": True})
 
 
 async def _remote(request: web.Request) -> web.Response:
@@ -689,6 +814,8 @@ def make_app(client: Client, pairing_code: str, verification_code: str) -> web.A
     app.router.add_get("/api/heating", _heating)
     app.router.add_post("/api/heating/helper", _heating_helper)
     app.router.add_post("/api/heating/save", _heating_save)
+    app.router.add_post("/api/heating/advise", _heating_advise)
+    app.router.add_post("/api/heating/advice/apply", _heating_advice_apply)
     app.router.add_get("/api/remote", _remote)
     app.router.add_get("/api/remote/qr.svg", _remote_qr)
     app.router.add_post("/api/remote/request", _remote_request)

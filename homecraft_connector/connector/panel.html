@@ -196,6 +196,7 @@ dialog input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--hfb
 .circ .m { font-size: 12px; color: var(--hfb-text-2); }
 .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--hfb-fill); border-radius: 12px; }
 .seg.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .seg button { min-height: 36px; padding: 0 6px; background: transparent; box-shadow: none; color: var(--hfb-text-2); font-weight: 500; }
 .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--hfb-card); color: var(--hfb-text);
   font-weight: 600; box-shadow: var(--hfb-btn-raised-shadow); }
@@ -228,6 +229,14 @@ label.f input { font-size: 14px; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hfb-card) 40%, transparent); }
 .bar button.primary { background: var(--hfb-card); color: var(--hfb-text); }
 .bar button:focus-visible { outline-color: var(--hfb-card); }
+/* Topení › Doporučení (#58) */
+.summary { display: grid; gap: 6px; background: var(--hfb-fill); border-radius: var(--hfb-tile-radius); padding: 12px 14px;
+  font-size: 13px; overflow-wrap: anywhere; }
+.summary p, .summary ul { margin: 0; }
+.summary ul { padding-left: 18px; }
+.row .sg { font-size: 13px; overflow-wrap: anywhere; }
+table.chg { width: auto; margin-top: 4px; }
+table.chg th, table.chg td { padding: 3px 14px 3px 0; border-bottom: 0; background: transparent; }
 /* Vzdálený přístup (#50) */
 .halves { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 .g3 { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 8px; }
@@ -265,6 +274,7 @@ label.f input { font-size: 14px; }
   .top .short { display: inline; }
   .tr { grid-template-columns: minmax(0, 1fr) auto; }
   .tr .when { grid-column: 1 / -1; }
+  .seg.five { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 [hidden] { display: none !important; }
@@ -392,11 +402,12 @@ label.f input { font-size: 14px; }
           <p class="help">Název se přepíše v celém Home Assistantu: na kartě topení, v notifikacích i v historii.</p></div>
         <input id="circName" maxlength="100" autocomplete="off" data-fk="circName">
       </div>
-      <div class="seg" role="tablist" aria-label="Nastavení okruhu" id="subTabs">
+      <div class="seg five" role="tablist" aria-label="Nastavení okruhu" id="subTabs">
         <button type="button" role="tab" data-sub="valves">Hlavice</button>
         <button type="button" role="tab" data-sub="windows">Okna</button>
         <button type="button" role="tab" data-sub="rule">Kdy topit</button>
         <button type="button" role="tab" data-sub="boiler">Kotel</button>
+        <button type="button" role="tab" data-sub="advice">Doporučení</button>
       </div>
       <div id="heatMsg" class="msg"></div>
       <div id="circMsg" class="msg"></div>
@@ -439,6 +450,12 @@ label.f input { font-size: 14px; }
         </div>
         <div class="grid g2" id="bSource" hidden></div>
         <p class="help">Zdroj tepla, výkon a blokaci taktování zadává technik v Homecraftu.</p>
+      </div>
+      <div class="stack sm" data-sub="advice" role="tabpanel">
+        <p class="help">Homecraft projde posledních 14 dní topení, rozvrhy a nastavení kotle a navrhne, kde ušetřit.</p>
+        <div class="btns"><button type="button" class="primary" id="adviseBtn" disabled>Analyzovat</button></div>
+        <div id="adviceMsg" class="msg" role="status"></div>
+        <div class="stack sm" id="adviceOut"></div>
       </div>
       <div id="helperMsg" class="msg" role="status"></div>
       <div id="saveMsg" class="msg" role="status"></div>
@@ -767,7 +784,7 @@ async function call(method, path, body) {
   }
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+  if (!r.ok) throw Object.assign(new Error(data.error || "HTTP " + r.status), { code: data.code });
   return data;
 }
 
@@ -918,6 +935,8 @@ const AUDIT_TEXT = {
   "update.run": ["Aktualizace spuštěná z panelu", true],
   "panel.helper": ["Majitel změnil nastavení topení v panelu", true],
   "heating.save": ["Majitel uložil názvy a okna topení v panelu", true],
+  "heating.advise": ["Majitel nechal analyzovat topení v panelu", true],
+  "heating.advice_apply": ["Majitel použil doporučení k topení v panelu", true],
   "remote_access.request": ["Majitel požádal o vzdálený přístup", false],
   "updates.set": ["Poslal seznam aktualizací", false],
   "errors.report": ["Dostal chybová hlášení", true],
@@ -1702,6 +1721,7 @@ function renderCircuit() {
   $("bRelay").textContent = boiler.relay ? RELAY[boiler.relay] || boiler.relay : "–";
   $("bOverrun").textContent = boiler.overrun != null ? num(boiler.overrun) + " min" : "–";
   renderBoilerSource();
+  renderAdvice();
 }
 
 // The heat source the technician set in Homecraft, from the features report
@@ -1733,6 +1753,169 @@ function renderBoilerSource() {
 }
 
 for (const b of $("subTabs").children) b.onclick = () => { subTab = b.dataset.sub; renderCircuit(); };
+
+// --- Doporučení (#58): heating.advise / heating.advice_apply through Homecraft.
+// Everything from Homecraft (the AI summary too) goes in as textContent, never HTML.
+const advice = {};  // instance -> { data, busy: "advise" | "apply" | false, msg: [text, cls], stale }
+let adviceShown = null;  // the circuit #adviceOut was built for: rebuilt only when it or its advice changes
+let applyArmed = null;   // [button, timer] of a Použít waiting for its second click
+
+function mk(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// Paragraphs from blank-line separated lines, a list from "- " / "* " / "• " / "1. " / "2) " lines.
+function summaryNodes(text) {
+  const nodes = [];
+  let list = null, para = null;
+  for (const raw of String(text).split("\n")) {
+    const s = raw.trim().replace(/\*\*/g, "");
+    const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(s);
+    if (!s) { list = para = null; continue; }
+    if (bullet) {
+      if (!list) nodes.push(list = mk("ul"));
+      list.append(mk("li", "", bullet[1]));
+      para = null;
+    } else if (para) para.textContent += " " + s;
+    else { nodes.push(para = mk("p", "", s)); list = null; }
+  }
+  return nodes;
+}
+
+const slotTime = (start, stop) => (start || "") + (stop ? "–" + stop : "");
+
+function findingRow(f, i, a) {
+  const row = mk("div", "row");
+  const body = mk("div", "grow");
+  const t = f.texts || {};
+  body.append(mk("div", "n", "[" + (i + 1) + "] " + (t.title || f.rule || "")));
+  body.append(mk("div", "m", [f.subject_name, t.period].filter(Boolean).join(" · ")));
+  if (t.evidence) body.append(mk("div", "m", t.evidence));
+  if (t.suggestion) body.append(mk("div", "sg", t.suggestion));
+  if (Array.isArray(t.impact) && t.impact.length) body.append(mk("div", "m", "Odhad úspory: " + t.impact.join(", ")));
+  const temps = f.change_id && f.change && Array.isArray(f.change.temperatures) ? f.change.temperatures : [];
+  if (temps.length) {
+    const table = mk("table", "chg");
+    const head = mk("tr");
+    head.append(mk("th", "", "Rozvrh"), mk("th", "", "Čas"), mk("th", "", "Teplota"));
+    table.append(head);
+    for (const [schedule, start, stop, from, to] of temps) {
+      const tr = mk("tr");
+      tr.append(mk("td", "", schedule), mk("td", "", slotTime(start, stop)), mk("td", "", temp(from) + " → " + temp(to)));
+      table.append(tr);
+    }
+    body.append(table);
+  }
+  row.append(body);
+  if (f.change_id) {
+    const b = mk("button", "primary", "Použít");
+    b.type = "button";
+    b.disabled = !!a.busy || !!a.stale;
+    b.onclick = () => applyAdvice(circ, f.change_id, b);
+    row.append(b);
+  }
+  return row;
+}
+
+function renderAdvice(force) {
+  $("adviseBtn").disabled = !circ || !!(advice[circ] && advice[circ].busy);
+  if (!force && adviceShown === circ) return;
+  adviceShown = circ;
+  disarmApply();
+  const a = advice[circ] || {};
+  $("adviseBtn").textContent = a.busy === "advise" ? "Analyzuji…" : a.data || a.stale ? "Analyzovat znovu" : "Analyzovat";
+  $("adviceMsg").textContent = a.msg ? a.msg[0] : "";
+  $("adviceMsg").className = "msg" + (a.msg && a.msg[1] ? " " + a.msg[1] : "");
+  const d = a.data;
+  const out = [];
+  if (d) {
+    const r = d.range || {};
+    if (r.start && r.end) out.push(mk("p", "help", "Analyzované období: " + fmtDate(Date.parse(r.start) / 1000) + " – " + fmtDate(Date.parse(r.end) / 1000)));
+    if (typeof d.summary === "string" && d.summary.trim()) {
+      const box = mk("div", "summary");
+      box.append(mk("h3", "h", "Shrnutí"), ...summaryNodes(d.summary));
+      out.push(box);
+    }
+    const findings = Array.isArray(d.findings) ? d.findings : [];
+    if (findings.length) {
+      const rows = mk("div", "rows");
+      rows.append(...findings.map((f, i) => findingRow(f, i, a)));
+      out.push(rows);
+    } else out.push(mk("div", "alert ok", "Homecraft nenašel nic, co by šlo u topení zlepšit."));
+    const skipped = Array.isArray(d.skipped) ? d.skipped : [];
+    if (skipped.length) {
+      const det = mk("details", "adv");
+      det.append(mk("summary", "", "Co se nedalo posoudit (" + skipped.length + ")"));
+      const rows = mk("div", "rows");
+      for (const s of skipped) {
+        const row = mk("div", "row");
+        const g = mk("div", "grow");
+        g.append(mk("div", "n", (s.texts && s.texts.rule) || s.rule || ""), mk("div", "m", (s.texts && s.texts.reason) || ""));
+        row.append(g);
+        rows.append(row);
+      }
+      det.append(rows);
+      out.push(det);
+    }
+  }
+  $("adviceOut").replaceChildren(...out);
+}
+
+async function analyse(instance, note) {
+  const a = advice[instance] ??= {};
+  a.busy = "advise";
+  a.stale = false;
+  a.msg = [(note || "") + "Analyzuji… (může to trvat až 2 minuty)", ""];
+  renderAdvice(true);
+  try {
+    a.data = await call("POST", "api/heating/advise", { instance });
+    a.msg = note ? [note.trim(), "ok"] : null;
+  } catch (e) {
+    // The old findings stay readable, their Použít off: Homecraft may have dropped them.
+    a.stale = true;
+    a.msg = [(note || "") + e.message, "err"];
+  } finally {
+    a.busy = false;
+    if (instance === circ) renderAdvice(true);
+  }
+}
+
+// Two steps instead of confirm(): the Companion app's webview may suppress dialogs.
+function disarmApply() {
+  if (!applyArmed) return;
+  clearTimeout(applyArmed[1]);
+  applyArmed[0].textContent = "Použít";
+  applyArmed = null;
+}
+async function applyAdvice(instance, changeId, b) {
+  if (!applyArmed || applyArmed[0] !== b) {
+    disarmApply();
+    b.textContent = "Opravdu změnit rozvrh?";
+    applyArmed = [b, setTimeout(disarmApply, 5000)];
+    return;
+  }
+  disarmApply();
+  const a = advice[instance];
+  a.busy = "apply";
+  a.msg = ["Homecraft mění rozvrh…", ""];
+  renderAdvice(true);
+  try {
+    await call("POST", "api/heating/advice/apply", { instance, change_id: changeId });
+  } catch (e) {
+    a.busy = false;
+    // Homecraft drops the analysis after any write attempt: its other changes are gone too.
+    a.stale = !["offline", "paused", "busy"].includes(e.code);
+    a.msg = [e.message, "err"];
+    if (instance === circ) renderAdvice(true);
+    return;
+  }
+  await analyse(instance, "Návrh je použitý, rozvrh v Home Assistantu je změněný. ");
+}
+
+$("adviseBtn").onclick = () => { if (circ) analyse(circ); };
 
 // One POST per key at a time; a newer value waits and goes after it.
 const saving = {};  // key -> true while its POST runs

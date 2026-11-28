@@ -443,7 +443,8 @@ def test_save_offline_is_409(run_panel, agent, monkeypatch):
         ("blocked", "", 409, "Technik musí nejdřív vyřešit změny v Home Assistantu."),
         ("failed", "Změny jsou uložené, ale nasazení se nepovedlo.", 502, "nepovedlo"),
         ("invalid", "Hlavice x v okruhu není", 400, "Hlavice x v okruhu není"),
-        ("busy", "Too many requests in flight", 409, "už probíhá"),
+        ("busy", "Too many requests in flight", 409, "zaneprázdněný"),
+        ("busy", "Ukládání topení už probíhá", 409, "Ukládání topení už probíhá"),
         ("unknown_op", "Unknown operation", 502, "neumí"),
         ("unknown", "", 502, "nevíme, jestli se změna uložila"),
         ("internal", "Internal error", 502, "(internal)"),
@@ -467,3 +468,159 @@ def test_save_needs_the_nonce(run_panel, agent, monkeypatch):
     body = {"instance": C1, "title": "X"}
     [(status, _)] = run_panel(_save_scenario(monkeypatch, agent, [body], ask, nonce=False))
     assert status == 403 and asked == []
+
+
+# --- heating.advise / heating.advice_apply (#58)
+
+ADVICE = {
+    "range": {"start": "2026-11-14T00:00:00+00:00", "end": "2026-11-28T00:00:00+00:00"},
+    "summary": "Shrnutí [1].",
+    "findings": [
+        {
+            "rule": "comfort_temperature",
+            "subject": "climate.bathroom_valve",
+            "subject_name": "Koupelna",
+            "texts": {"title": "T", "evidence": "", "period": "", "suggestion": "S", "impact": []},
+            "impact": {},
+            "change_id": "abc",
+            "change": {"schedules": ["Den"], "temperatures": [["Den", "06:00", None, 23, 22]]},
+        }
+    ],
+    "skipped": [],
+}
+
+
+def _advice_scenario(monkeypatch, agent, posts, ask, headers=None):
+    """POST each (path, body) with CIRCUITS_1 reported; `ask` replaces Client.ask."""
+    features.save({"features": [{"name": "Topení", "id": "heating", "circuits": CIRCUITS_1}]})
+    monkeypatch.setattr(agent, "ask", ask)
+
+    async def scenario(http):
+        out = []
+        for path, body in posts:
+            h = {"X-Homecraft-Panel": panel.NONCE, **(headers or {})}
+            r = await http.post(path, json=body, headers=h)
+            out.append((r.status, await r.json()))
+        return out
+
+    return scenario
+
+
+def test_advise_and_apply(run_panel, agent, monkeypatch):
+    asked = []
+
+    async def ask(op, payload, timeout):
+        asked.append((op, payload, timeout))
+        return ADVICE if op == "heating.advise" else {"status": "success", "applied": ["switch.s"]}
+
+    posts = [
+        ("/api/heating/advise", {"instance": C1}),
+        ("/api/heating/advice/apply", {"instance": C1, "change_id": "abc"}),
+    ]
+    headers = {"X-Remote-User-Display-Name": "Karel", "X-Remote-User-Name": "karel"}
+    got = run_panel(_advice_scenario(monkeypatch, agent, posts, ask, headers))
+    assert got[0] == (200, {**ADVICE, "ok": True})
+    assert got[1] == (200, {"ok": True})
+    assert asked == [
+        ("heating.advise", {"instance": C1}, panel.ADVISE_TIMEOUT),
+        (
+            "heating.advice_apply",
+            {"instance": C1, "change_id": "abc", "ha_user": "Karel"},
+            panel.SAVE_TIMEOUT,
+        ),
+    ]
+    audit.flush()
+    assert [(e["op"], e["target"], e["ok"]) for e in audit.recent()] == [
+        ("heating.advice_apply", C1, True),
+        ("heating.advise", C1, True),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("headers", "sent"),
+    [
+        ({}, None),
+        ({"X-Remote-User-Name": "karel"}, "karel"),
+        ({"X-Remote-User-Display-Name": " \u202eKa\u200frel " + "x" * 80}, "Karel " + "x" * 58),
+        ({"X-Remote-User-Display-Name": "\u202e"}, None),
+    ],
+)
+def test_apply_ha_user(run_panel, agent, monkeypatch, headers, sent):
+    """Printable, at most 64 characters, left out when empty."""
+    asked = []
+
+    async def ask(op, payload, timeout):
+        asked.append(payload)
+        return {"status": "success", "applied": []}
+
+    posts = [("/api/heating/advice/apply", {"instance": C1, "change_id": "abc"})]
+    run_panel(_advice_scenario(monkeypatch, agent, posts, ask, headers))
+    [payload] = asked
+    assert payload.get("ha_user") == sent
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/heating/advise", {"instance": "heating_circuit_9"}),
+        ("/api/heating/advise", ["x"]),
+        ("/api/heating/advice/apply", {"instance": C1}),
+        ("/api/heating/advice/apply", {"instance": C1, "change_id": ""}),
+        ("/api/heating/advice/apply", {"instance": C1, "change_id": "x" * 33}),
+        ("/api/heating/advice/apply", {"instance": C1, "change_id": 5}),
+        ("/api/heating/advice/apply", {"instance": "heating_circuit_9", "change_id": "abc"}),
+    ],
+)
+def test_advice_refuses_bodies(run_panel, agent, monkeypatch, path, body):
+    asked = []
+
+    async def ask(op, payload, timeout):
+        asked.append(payload)
+
+    [(status, reply)] = run_panel(_advice_scenario(monkeypatch, agent, [(path, body)], ask))
+    assert status == 400 and reply["ok"] is False
+    assert asked == [] and audit.recent() == []
+
+
+@pytest.mark.parametrize(
+    ("path", "code", "message", "status", "shown"),
+    [
+        ("/api/heating/advise", "unknown_op", "Unknown operation", 502, "doporučení neumí"),
+        ("/api/heating/advise", "busy", "Too many requests in flight", 409, "zaneprázdněný"),
+        (
+            "/api/heating/advise",
+            "busy",
+            "Analýza topení už probíhá, počkejte na ni.",
+            409,
+            "počkejte",
+        ),
+        (
+            "/api/heating/advise",
+            "failed",
+            "Home Assistant není u projektu nastavený.",
+            502,
+            "není u projektu",
+        ),
+        ("/api/heating/advise", "offline", "", 409, "není připojený"),
+        (
+            "/api/heating/advice/apply",
+            "stale",
+            "Rozvrh se mezitím změnil, spusťte analýzu znovu.",
+            409,
+            "Rozvrh se mezitím změnil",
+        ),
+        ("/api/heating/advice/apply", "stale", "", 409, "Návrh vypršel"),
+        ("/api/heating/advice/apply", "invalid", "Návrh změny nejde použít.", 400, "nejde použít"),
+        ("/api/heating/advice/apply", "unknown", "", 502, "nevíme, jestli se návrh použil"),
+    ],
+)
+def test_advice_errors(run_panel, agent, monkeypatch, path, code, message, status, shown):
+    async def ask(op, payload, timeout):
+        raise AskError(code, message)
+
+    body = {"instance": C1, "change_id": "abc"}
+    [(got, reply)] = run_panel(_advice_scenario(monkeypatch, agent, [(path, body)], ask))
+    assert got == status and shown in reply["error"] and reply["code"] == code
+    audit.flush()
+    [entry] = audit.recent()
+    assert (entry["ok"], entry["code"], entry["target"]) == (False, code, C1)
