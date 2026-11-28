@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.27.0
+
+- **Topení › Doporučení** v panelu (homecraftcz/homecraft-addon#58): majitel
+  dá u okruhu **Analyzovat** a Homecraft (`heating.advise`,
+  homecraftcz/homecraft#337) projde posledních 14 dní topení, rozvrhy
+  a nastavení kotle. Panel ukáže krátké AI shrnutí, nálezy s návrhem a odhadem
+  úspory a sbalená pravidla, která nešlo posoudit. U nálezu se změnou
+  rozvrhu je tabulka (rozvrh, čas, staré → nové °C) a **Použít**: Homecraft
+  návrh zapíše do rozvrhu (`heating.advice_apply`) a panel spustí analýzu
+  znovu. Když se rozvrh mezitím změnil nebo návrh vypršel, panel to řekne
+  a nabídne **Analyzovat znovu**. Panel sám do HA nic nezapisuje, text od
+  Homecraftu vkládá jen jako text. V auditu je `heating.advise`
+  a `heating.advice_apply`.
+
 ## 0.26.0
 
 - Hlavice Shelly BLU TRV okruhu topení jde sjednotit z Homecraftu: operace

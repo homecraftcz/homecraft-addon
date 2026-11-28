@@ -94,7 +94,7 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
 - **Topení**: vlevo okruhy z Homecraftu (počet hlavic, topí / útlum) a odkaz
   **Otevřít kartu topení** (pohled okruhu v HA podle atributu `url`
   `binary_sensor.heating_state_<okruh>`, jinak `/lovelace`). Vybraný okruh má
-  čtyři podzáložky:
+  pět podzáložek:
   - **Hlavice**: název, místnost (z ID entity `climate.<místnost>_valve`),
     teplota, cíl, fáze (rychlý start, doběh, doběh čerpadla, zavřeno, jinak
     topí / drží teplotu) a baterie;
@@ -105,7 +105,23 @@ a stav spojení. Pět záložek (odkazy `#home`, `#heating`, `#remote`, `#device
     **Venkovní teplotou** / **Časem**, práh (5–25 °C po 0,5) nebo čas od–do;
   - **Kotel**: jen čtení (relé kotle `switch.boiler_<okruh>`, doběh čerpadla;
     z Homecraftu zdroj tepla, výkon a blokace taktování, jen ty, které technik
-    vyplnil, homecraftcz/homecraft#952).
+    vyplnil, homecraftcz/homecraft#952);
+  - **Doporučení**: **Analyzovat** pošle Homecraftu `heating.advise`
+    (homecraftcz/homecraft#337). Homecraft projde posledních 14 dní historie
+    okruhu, rozvrhy a profil kotle a vrátí krátké AI shrnutí a nálezy (co
+    našel, u koho, co navrhuje a odhad úspory; „Analyzuji… (může to trvat až
+    2 minuty)“, panel čeká nejvýš 150 s). Pravidla, která nešlo posoudit,
+    jsou sbalená pod **Co se nedalo posoudit**. U nálezu se změnou rozvrhu
+    panel ukáže tabulku (rozvrh, čas, staré → nové °C) a tlačítko **Použít**
+    (dvakrát, „Opravdu změnit rozvrh?“): pošle `heating.advice_apply` jen
+    s ID návrhu, celý návrh drží Homecraft (10 minut) a sám ho zapíše do
+    rozvrhu v HA (`scheduler.edit`). Po použití panel spustí analýzu znovu.
+    Když se rozvrh mezitím změnil nebo návrh vypršel, panel ukáže hlášku
+    Homecraftu a **Analyzovat znovu**. Starší Homecraft: „Tahle verze
+    Homecraftu doporučení neumí.“ Panel sám do HA nic nezapisuje a text od
+    Homecraftu (i AI shrnutí) vkládá jen jako text, nikdy jako HTML. V auditu
+    je `heating.advise` a `heating.advice_apply` (okruh) a k Homecraftu jde
+    jméno uživatele HA z ingressu (jen do historie Homecraftu).
 
   **Co mění majitel sám**: připomenutí okna a pravidlo Počasí. Jsou to
   helpery okruhu v HA (`input_number.heating_window_reminder_<okruh>`,
@@ -344,6 +360,11 @@ System Monitor, Scheduler a Browser Mod; Ping jen na `1.1.1.1` nebo na zařízen
 uložené v záložce **Zařízení v síti**) a soubory jen v `packages/`,
 `custom_templates/` a `themes/` (`configuration.yaml` jen ke čtení). Cokoli
 jiného odmítne s chybou `not_allowed`.
+
+`scheduler.edit` z **Doporučení** (záložka Topení) mění jen teploty
+v rozvrhech okruhu; to hlídá Homecraft. Kontrola doplňku je pro něj stejná
+jako pro jiné `scheduler.edit`: přepínač rozvrhu `switch.*` a v akcích jen
+`climate.set_temperature` na entitách `climate.*`.
 
 Seznam síťových zařízení ze záložky **Zařízení v síti** smí Homecraft jen přečíst
 (`network_devices.get`): adresy, URL, MAC a poznámky, žádná hesla. Požadavek
