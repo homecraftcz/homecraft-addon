@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 import aiohttp
 
-from . import house, policy
+from . import house, policy, selfcheck, settings
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,8 @@ async def rpc(http: aiohttp.ClientSession, url: str, method: str, params: dict |
         raise RpcError(f"{method}: not JSON-RPC")
     if "error" in data:
         err = data["error"] if isinstance(data["error"], dict) else {}
-        raise RpcError(f"{method}: {err.get('code')} {str(err.get('message'))[:200]}")
+        # the code only: the gateway's message is its own text, not ours to pass on
+        raise RpcError(f"{method}: error {str(err.get('code'))[:20]}")
     return data.get("result")
 
 
@@ -218,6 +219,26 @@ async def _fw(http, url: str, tid: int) -> str:
     return fw if isinstance(fw, str) else ""
 
 
+def _behind(fw: str, latest: str) -> bool:
+    """Is `fw` older than `latest`? A Shelly fw_id starts with its build time
+    (20241004-125638/…): a valve on a newer or beta build is never sent back."""
+    return bool(fw and latest) and fw.split("/")[0] < latest.split("/")[0]
+
+
+async def _call(http, url: str, tid: int, method: str, params: dict) -> None:
+    """BluTrv.Call, tried again until VERIFY_TIMEOUT: right after an update the
+    valve restarts and its gateway reconnects it."""
+    deadline = time.monotonic() + VERIFY_TIMEOUT
+    while True:
+        try:
+            await rpc(http, url, "BluTrv.Call", {"id": tid, "method": method, "params": params})
+            return
+        except RpcError:
+            if time.monotonic() > deadline:
+                raise
+            await asyncio.sleep(POLL)
+
+
 async def _valve(
     http, url: str, v: dict, config: dict, update: bool, latest: str, apply: bool
 ) -> None:
@@ -230,14 +251,14 @@ async def _valve(
             v["update"] = (
                 "unknown"
                 if not (latest and before)
-                else ("current" if before == latest else "available")
+                else ("available" if _behind(before, latest) else "current")
             )
         remote = await rpc(http, url, "BluTrv.GetRemoteConfig", {"id": tid})
         remote = remote.get("config") if isinstance(remote, dict) else None
         v["diff"] = differences(config, remote if isinstance(remote, dict) else {})
         v["config"] = "mismatch" if v["diff"] else "ok"
         return
-    if update and latest and before and before != latest:
+    if update and _behind(before, latest):
         v["update"] = "running"
         await rpc(http, url, "BluTrv.UpdateFirmware", {"id": tid})
         # Done once the version changes: a valve on another build than the
@@ -256,18 +277,12 @@ async def _valve(
         else:
             v["update"] = "updated"
     elif update:
-        v["update"] = "current" if latest and before == latest else "unknown"
+        v["update"] = "current" if latest and before else "unknown"
     v["config"] = "running"
     if "trv" in config:
-        params = {"id": 0, "config": config["trv"]}
-        await rpc(
-            http, url, "BluTrv.Call", {"id": tid, "method": "TRV.SetConfig", "params": params}
-        )
+        await _call(http, url, tid, "TRV.SetConfig", {"id": 0, "config": config["trv"]})
     if "ui" in config:
-        params = {"config": {"ui": config["ui"]}}
-        await rpc(
-            http, url, "BluTrv.Call", {"id": tid, "method": "Sys.SetConfig", "params": params}
-        )
+        await _call(http, url, tid, "Sys.SetConfig", {"config": {"ui": config["ui"]}})
     deadline = time.monotonic() + VERIFY_TIMEOUT
     v["diff"] = None  # nothing read back yet: never "ok"
     while True:
@@ -387,15 +402,13 @@ async def start(instance: str, config: object, update: object, apply: bool = Tru
         "error": "",
         "valves": [],
     }
-    _jobs[instance] = job
+    before, _jobs[instance] = _jobs.get(instance), job
     try:
-        async with aiohttp.ClientSession() as http:
-            states = await house._states(http)
-        sensor = states.get(f"sensor.heating_gateways_{instance}")
-        if sensor is None:
-            raise policy.OpError("not_found", f"sensor.heating_gateways_{instance}")
-    except BaseException as e:
-        job.update(running=False, finished_at=time.time(), error=getattr(e, "code", "internal"))
+        sensor = await _gateways_sensor(instance)
+    except BaseException:
+        _jobs.pop(instance)  # a start that failed keeps the last real result
+        if before is not None:
+            _jobs[instance] = before
         raise
     gateways = (sensor.get("attributes") or {}).get("gateways")
     gateways = gateways if isinstance(gateways, dict) else {}
@@ -403,6 +416,23 @@ async def start(instance: str, config: object, update: object, apply: bool = Tru
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return {"started": True, "gateways": len(gateways)}
+
+
+async def _gateways_sensor(instance: str) -> dict:
+    """HA's sensor.heating_gateways_<circuit>; policy.OpError not_found / HA's."""
+    eid = f"sensor.heating_gateways_{instance}"
+    headers = {"Authorization": f"Bearer {settings.SUPERVISOR_TOKEN}"}
+    try:
+        async with aiohttp.ClientSession(headers=headers, timeout=selfcheck.TIMEOUT) as http:
+            async with http.get(f"{settings.CORE_HTTP_URL}/api/states/{eid}") as r:
+                if r.status == 404:
+                    raise policy.OpError("not_found", eid)
+                if r.status != 200:
+                    raise policy.OpError("ha_failed", f"/api/states: HTTP {r.status}")
+                sensor = await r.json()
+    except (aiohttp.ClientError, TimeoutError, ValueError) as e:
+        raise policy.OpError("ha_unreachable", type(e).__name__) from None
+    return sensor if isinstance(sensor, dict) else {}
 
 
 def status(instance: object) -> dict | None:

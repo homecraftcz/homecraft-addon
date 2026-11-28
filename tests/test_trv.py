@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from aiohttp import web
 
-from connector import client, house, policy, trv
+from connector import client, policy, trv
 
 PROFILE = {
     "trv": {"min_valve_position": 5, "flags": {"anticlog": True, "silent_mode": False}},
@@ -55,6 +55,12 @@ def test_differences():
     ]
 
 
+def test_behind_compares_build_times():
+    assert trv._behind("20241004-125638/main@a", "20250101-000000/main@b")
+    assert not trv._behind("20250201-000000/beta@c", "20250101-000000/main@b")  # newer beta
+    assert not trv._behind("", "20250101-000000/main@b")
+
+
 def test_gateway_url():
     assert trv.gateway_url("http://192.168.1.20") == "http://192.168.1.20:80"
     for bad in (
@@ -71,7 +77,7 @@ def test_gateway_url():
 def test_sync_updates_sets_and_verifies(monkeypatch):
     """Two valves on one gateway: the old one updates, both get the profile;
     the third (not paired on the gateway) fails without stopping the rest."""
-    fw = {200: "old", 201: "new"}
+    fw = {200: "20240101-000000/a", 201: "20250101-000000/b"}
     remote = {200: {"trv:0": {}, "sys": {"ui": {}}}, 201: {"trv:0": {}, "sys": {"ui": {}}}}
     calls = []
 
@@ -88,11 +94,11 @@ def test_sync_updates_sets_and_verifies(monkeypatch):
             ]
             result = {"components": comps[p["offset"] : p["offset"] + 2], "total": 3}
         elif method == "BluTrv.CheckForUpdates":
-            result = {"fw_id": "new"}
+            result = {"fw_id": "20250101-000000/b"}
         elif method == "BluTrv.GetRemoteDeviceInfo":
             result = {"device_info": {"fw_id": fw[p["id"]]}}
         elif method == "BluTrv.UpdateFirmware":
-            fw[p["id"]] = "new"
+            fw[p["id"]] = "20250101-000000/b"
         elif method == "BluTrv.Call" and p["method"] == "TRV.SetConfig":
             cfg = dict(p["params"]["config"])
             flags = cfg.pop("flags")
@@ -122,10 +128,12 @@ def test_sync_updates_sets_and_verifies(monkeypatch):
             }
         }
 
-        async def fake_states(http):
-            return states
+        async def fake_sensor(instance):
+            if f"sensor.heating_gateways_{instance}" not in states:
+                raise policy.OpError("not_found", instance)
+            return states[f"sensor.heating_gateways_{instance}"]
 
-        monkeypatch.setattr(house, "_states", fake_states)
+        monkeypatch.setattr(trv, "_gateways_sensor", fake_sensor)
         monkeypatch.setattr(trv, "gateway_url", lambda u: u)
         monkeypatch.setattr(trv, "POLL", 0)
         conn = client._Conn(None, None, lambda: None, None)
@@ -144,12 +152,17 @@ def test_sync_updates_sets_and_verifies(monkeypatch):
         synced = await client._dispatch("trv.status", {"instance": "c1"}, conn)
         # Changed by hand in the gateway's web UI: trv.check shows it, writes nothing.
         remote[201]["sys"]["ui"]["brightness"] = 7
-        fw[200] = "older"
+        fw[200] = "20230101-000000/c"
         writes = len(calls)
         await client._dispatch("trv.check", {"instance": "c1", "config": PROFILE}, conn)
         while trv.status("c1")["running"]:
             await asyncio.sleep(0.01)
         checked = await client._dispatch("trv.status", {"instance": "c1"}, conn)
+        # a start that fails (HA lost the sensor) keeps that result
+        states.clear()
+        with pytest.raises(policy.OpError):
+            await trv.start("c1", PROFILE, True)
+        assert trv.status("c1") == checked
         assert not {"BluTrv.Call", "BluTrv.UpdateFirmware"} & set(calls[writes:])
         await runner.cleanup()
         return synced, checked
@@ -163,7 +176,10 @@ def test_sync_updates_sets_and_verifies(monkeypatch):
     assert by["climate.b_valve"]["config"] == "mismatch"
     assert by["climate.b_valve"]["diff"] == [{"field": "ui.brightness", "want": 3, "have": 7}]
     by = {v["entity_id"]: v for v in job["valves"]}
-    assert by["climate.a_valve"]["update"] == "updated" and by["climate.a_valve"]["fw"] == "new"
+    assert (
+        by["climate.a_valve"]["update"] == "updated"
+        and by["climate.a_valve"]["fw"] == "20250101-000000/b"
+    )
     assert by["climate.b_valve"]["update"] == "current"
     assert [by[e]["config"] for e in ("climate.a_valve", "climate.b_valve")] == ["ok", "ok"]
     assert by["climate.c_valve"]["config"] == "failed" and by["climate.c_valve"]["error"]
