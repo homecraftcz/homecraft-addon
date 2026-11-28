@@ -443,7 +443,8 @@ def test_save_offline_is_409(run_panel, agent, monkeypatch):
         ("blocked", "", 409, "Technik musí nejdřív vyřešit změny v Home Assistantu."),
         ("failed", "Změny jsou uložené, ale nasazení se nepovedlo.", 502, "nepovedlo"),
         ("invalid", "Hlavice x v okruhu není", 400, "Hlavice x v okruhu není"),
-        ("busy", "Too many requests in flight", 409, "už probíhá"),
+        ("busy", "Too many requests in flight", 409, "zaneprázdněný"),
+        ("busy", "Ukládání topení už probíhá", 409, "Ukládání topení už probíhá"),
         ("unknown_op", "Unknown operation", 502, "neumí"),
         ("unknown", "", 502, "nevíme, jestli se změna uložila"),
         ("internal", "Internal error", 502, "(internal)"),
@@ -514,16 +515,14 @@ def test_advise_and_apply(run_panel, agent, monkeypatch):
 
     posts = [
         ("/api/heating/advise", {"instance": C1}),
-        ("/api/heating/advise", {"instance": C1, "days": 7}),
         ("/api/heating/advice/apply", {"instance": C1, "change_id": "abc"}),
     ]
     headers = {"X-Remote-User-Display-Name": "Karel", "X-Remote-User-Name": "karel"}
     got = run_panel(_advice_scenario(monkeypatch, agent, posts, ask, headers))
     assert got[0] == (200, {**ADVICE, "ok": True})
-    assert got[2] == (200, {"ok": True, "status": "success", "applied": ["switch.s"]})
+    assert got[1] == (200, {"ok": True})
     assert asked == [
         ("heating.advise", {"instance": C1}, panel.ADVISE_TIMEOUT),
-        ("heating.advise", {"instance": C1, "days": 7}, panel.ADVISE_TIMEOUT),
         (
             "heating.advice_apply",
             {"instance": C1, "change_id": "abc", "ha_user": "Karel"},
@@ -534,11 +533,20 @@ def test_advise_and_apply(run_panel, agent, monkeypatch):
     assert [(e["op"], e["target"], e["ok"]) for e in audit.recent()] == [
         ("heating.advice_apply", C1, True),
         ("heating.advise", C1, True),
-        ("heating.advise", C1, True),
     ]
 
 
-def test_apply_without_ha_user(run_panel, agent, monkeypatch):
+@pytest.mark.parametrize(
+    ("headers", "sent"),
+    [
+        ({}, None),
+        ({"X-Remote-User-Name": "karel"}, "karel"),
+        ({"X-Remote-User-Display-Name": " \u202eKa\u200frel " + "x" * 80}, "Karel " + "x" * 58),
+        ({"X-Remote-User-Display-Name": "\u202e"}, None),
+    ],
+)
+def test_apply_ha_user(run_panel, agent, monkeypatch, headers, sent):
+    """Printable, at most 64 characters, left out when empty."""
     asked = []
 
     async def ask(op, payload, timeout):
@@ -546,17 +554,15 @@ def test_apply_without_ha_user(run_panel, agent, monkeypatch):
         return {"status": "success", "applied": []}
 
     posts = [("/api/heating/advice/apply", {"instance": C1, "change_id": "abc"})]
-    run_panel(_advice_scenario(monkeypatch, agent, posts, ask))
-    assert asked == [{"instance": C1, "change_id": "abc"}]
+    run_panel(_advice_scenario(monkeypatch, agent, posts, ask, headers))
+    [payload] = asked
+    assert payload.get("ha_user") == sent
 
 
 @pytest.mark.parametrize(
     ("path", "body"),
     [
         ("/api/heating/advise", {"instance": "heating_circuit_9"}),
-        ("/api/heating/advise", {"instance": C1, "days": 6}),
-        ("/api/heating/advise", {"instance": C1, "days": 31}),
-        ("/api/heating/advise", {"instance": C1, "days": True}),
         ("/api/heating/advise", ["x"]),
         ("/api/heating/advice/apply", {"instance": C1}),
         ("/api/heating/advice/apply", {"instance": C1, "change_id": ""}),
@@ -580,7 +586,14 @@ def test_advice_refuses_bodies(run_panel, agent, monkeypatch, path, body):
     ("path", "code", "message", "status", "shown"),
     [
         ("/api/heating/advise", "unknown_op", "Unknown operation", 502, "doporučení neumí"),
-        ("/api/heating/advise", "busy", "Too many requests in flight", 409, "už probíhá"),
+        ("/api/heating/advise", "busy", "Too many requests in flight", 409, "zaneprázdněný"),
+        (
+            "/api/heating/advise",
+            "busy",
+            "Analýza topení už probíhá, počkejte na ni.",
+            409,
+            "počkejte",
+        ),
         (
             "/api/heating/advise",
             "failed",

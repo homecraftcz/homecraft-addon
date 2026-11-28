@@ -453,7 +453,7 @@ table.chg th, table.chg td { padding: 3px 14px 3px 0; border-bottom: 0; backgrou
       </div>
       <div class="stack sm" data-sub="advice" role="tabpanel">
         <p class="help">Homecraft projde posledních 14 dní topení, rozvrhy a nastavení kotle a navrhne, kde ušetřit.</p>
-        <div class="btns"><button type="button" class="primary" id="adviseBtn">Analyzovat</button></div>
+        <div class="btns"><button type="button" class="primary" id="adviseBtn" disabled>Analyzovat</button></div>
         <div id="adviceMsg" class="msg" role="status"></div>
         <div class="stack sm" id="adviceOut"></div>
       </div>
@@ -1767,13 +1767,13 @@ function mk(tag, cls, text) {
   return e;
 }
 
-// Paragraphs from blank-line separated lines, a list from "- " / "* " / "• " lines.
+// Paragraphs from blank-line separated lines, a list from "- " / "* " / "• " / "1. " / "2) " lines.
 function summaryNodes(text) {
   const nodes = [];
   let list = null, para = null;
   for (const raw of String(text).split("\n")) {
     const s = raw.trim().replace(/\*\*/g, "");
-    const bullet = /^[-*•]\s+(.*)$/.exec(s);
+    const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(s);
     if (!s) { list = para = null; continue; }
     if (bullet) {
       if (!list) nodes.push(list = mk("ul"));
@@ -1821,11 +1821,11 @@ function findingRow(f, i, a) {
 }
 
 function renderAdvice(force) {
+  $("adviseBtn").disabled = !circ || !!(advice[circ] && advice[circ].busy);
   if (!force && adviceShown === circ) return;
   adviceShown = circ;
   disarmApply();
   const a = advice[circ] || {};
-  $("adviseBtn").disabled = !circ || !!a.busy;
   $("adviseBtn").textContent = a.busy === "advise" ? "Analyzuji…" : a.data || a.stale ? "Analyzovat znovu" : "Analyzovat";
   $("adviceMsg").textContent = a.msg ? a.msg[0] : "";
   $("adviceMsg").className = "msg" + (a.msg && a.msg[1] ? " " + a.msg[1] : "");
@@ -1874,6 +1874,8 @@ async function analyse(instance, note) {
     a.data = await call("POST", "api/heating/advise", { instance });
     a.msg = note ? [note.trim(), "ok"] : null;
   } catch (e) {
+    // The old findings stay readable, their Použít off: Homecraft may have dropped them.
+    a.stale = true;
     a.msg = [(note || "") + e.message, "err"];
   } finally {
     a.busy = false;
