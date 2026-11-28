@@ -26,6 +26,7 @@ from . import (
     identity,
     network_devices,
     policy,
+    trv,
     ws_proxy,
 )
 
@@ -571,6 +572,8 @@ class Client:
         reply = await self._handle(request, conn)
         refused = reply.pop("_refused", None)  # ws.send answered as HA would: its code
         error = reply.get("error")
+        if request.get("op") == "trv.status" and not error:
+            return reply  # polled during a trv job: read only, not worth an audit line
         audit.record(
             str(request.get("op")),
             _audit_target(request),
@@ -682,6 +685,8 @@ def _audit_target(req: dict) -> str:
         return f"Síť (feature {feature})" if feature else "Síť"
     if op == "network_devices.import":
         return "Síť (import z Homecraftu)"
+    if op in ("trv.sync", "trv.check", "trv.status"):
+        return f"Hlavice {str(req.get('instance'))[:100]}"
     return ""
 
 
@@ -712,6 +717,12 @@ async def _dispatch(op: object, req: dict, conn: _Conn) -> object:
         return {"devices": network_devices.load(), "slug": slug}
     if op == "network_devices.import":  # one-time move from Homecraft's DB (#635)
         return network_devices.import_devices(req["devices"])
+    if op == "trv.sync":  # Shelly BLU TRVs of a circuit: firmware + Homecraft's settings
+        return await trv.start(req["instance"], req["config"], req.get("update", True))
+    if op == "trv.check":  # read only: what differs from the circuit's settings
+        return await trv.start(req["instance"], req["config"], True, apply=False)
+    if op == "trv.status":
+        return trv.status(req["instance"])
     raise policy.OpError("unknown_op", str(op)[:64])
 
 

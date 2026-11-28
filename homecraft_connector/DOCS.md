@@ -355,6 +355,20 @@ pole, nic nepřepíše ani nesmaže. Nová zařízení z importu mají zdroj
 **Z Homecraftu**; integraci Ping na ně Homecraft nezaloží, dokud je uživatel
 v panelu neuloží.
 
+Hlavice Shelly BLU TRV okruhu topení (`trv.sync`, `trv.check`, `trv.status`,
+v auditu **Hlavice <okruh>**): doplněk najde brány BLU a jejich hlavice
+v `sensor.heating_gateways_<okruh>` knihovny topení a mluví jen s lokálním
+RPC těch bran (`http://` na soukromou IPv4, ne síť Supervisoru, bez hesla).
+`trv.sync` hlavicím aktualizuje firmware (`BluTrv.UpdateFirmware`, jen na
+verzi, kterou nabídne brána) a nastaví jim nastavení okruhu, které pošle
+Homecraft: jen pole Interface (`ui`: zámek, otočení displeje, jas, jednotky)
+a Behavior (`TRV.SetConfig`: příznaky, minimální otevření ventilu, kompenzace,
+výchozí boost a override, rozsah cílové teploty), každé v rozsahu podle Shelly
+API. Nastavení pak zpětně přečte a porovná. `trv.check` hlavice jen přečte
+a vrátí, co se liší (chtěná a skutečná hodnota) a kde je nový firmware.
+Úloha běží na pozadí, průběh vrací `trv.status`; pozastavení doplňku
+rozběhnutou úlohu nezastaví, jen nedovolí novou.
+
 Integrace z Marketplace / HACS: doplněk smí přečíst seznam repozitářů
 (`marketplace/repositories/list`, `hacs/repositories/list`) a nechat
 Marketplace nebo HACS stáhnout jen Scheduler component a Browser Mod
@@ -524,7 +538,7 @@ program, musí ve stejném PR upravit `apparmor.txt` a ověřit ho na HA OS
 - Integrace z Marketplace / HACS jsou připnuté jen tagem vydání, ne obsahem:
   kdyby autor tag v repozitáři přesunul, Marketplace / HACS stáhne nový obsah.
 - Služba Browser Mod `browser_mod.javascript` (JavaScript v prohlížečích
-  registrovaných v Browser Mod) se od verze po 0.25.0 odmítne v automatizacích,
+  registrovaných v Browser Mod) se od verze 0.26.0 odmítne v automatizacích,
   skriptech, balíčcích, dashboardech i v Node-RED. Topení ji používalo jen ve
   vzhledu Mushroom, ten od heating 1.21.0-beta.1 není.
 
